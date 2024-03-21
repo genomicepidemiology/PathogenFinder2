@@ -24,18 +24,18 @@ class Train_NeuralNet():
 
     def __init__(self, network, learning_rate=1e-5, weight_decay=1e-4, amsgrad=False,
                 loss_function=None):
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, roundup_power2_divisions:True, garbage_collection_threshold:0.6'
+        torch.cuda.empty_cache() 
 
         self.device = self.get_device()
         self.network = network.to(self.device)
         self.optimizer = torch.optim.Adam(self.network.parameters(),
                                             lr=learning_rate, weight_decay=weight_decay,
-                                        amsgrad=amsgrad)
+                                            amsgrad=amsgrad)
 
         self.loss = loss_function
         self.train_dataset = None
         self.val_dataset = None
-        torch.cuda.empty_cache() 
-        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
     def get_device(self):
         if torch.cuda.is_available():
@@ -125,7 +125,7 @@ class Train_NeuralNet():
             att_results = {"Genomes": [], "Proteins":[], "Attentions": []}
         else:
             att_results = None
-        with torch.inference():
+        with torch.inference_mode():
             for batch in tqdm(val_loader):
                 embeddings = batch["Embeddings"]
                 labels = batch["Pathogen_Label"]
@@ -231,7 +231,7 @@ class Train_NeuralNet():
         return log_dict, self.network
 
     def predict(self, x):
-        with torch.inference():
+        with torch.inference_mode():
             logits = self.network(x)
         return torch.sigmoid(logits)
 
