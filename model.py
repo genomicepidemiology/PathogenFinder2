@@ -16,7 +16,7 @@ import sys
 sys.dont_write_bytecode = True
 
 from conv1d_addatt_STD import Conv1D_AddAtt_Net
-from config_model import ConfigModel
+from config_model import ConfigModel, ParamsModel
 from train_model import Train_NeuralNet
 
 
@@ -106,23 +106,73 @@ class Compile_Model:
 
     def predict(self, x):
         logits = self.model(x)
-        return torch.sigmoid(logits)          
-    
-    def train_model(self):
-        if self.model is None:
-            raise ValueError("Set the Model First")
-        
+        return torch.sigmoid(logits)
+
+    def is_dual(self):
         if self.config.model_parameters["out_dim"] == 2:
             dual_pred = True
         else:
             dual_pred = False
+        return dual_pred
 
+    def create_hp_report(self):
+        params_str = {v: k for k, v in ParamsModel.function_param.items()}
+        hp_model = {}
+        for k, v in self.config.model_parameters:
+            if v in params_str:
+                hp_model[k] = params_str[v]
+            else:
+                hp_model[k] = str(v)
+        hp_train = {}
+        for k, v in self.config.train_parameters:
+            if v in params_str:
+                hp_train[k] = params_str[v]
+            else:
+                hp_train[k] = str(v)
+        return hp_model, hp_train
+    
+    def start_reports(self, memory_profile, tensorboard_path):
+        if memory_profile is not None:
+            torch.cuda.memory._record_memory_history(
+                max_entries=Train_NeuralNet.MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
+                )
+        else:
+            memory_profile = None
+
+        if tensorboard_path is not None:
+            timestamp = str(datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
+            log_dir = "{}_run_{}".format(tensorboard_path, timestamp)
+            writer = SummaryWriter(log_dir=log_dir)
+            prof = torch.profiler.profile(
+                        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+                        on_trace_ready=torch.profiler.tensorboard_trace_handler("{}_profiler.log".format(log_dir)),
+                        record_shapes=True, with_stack=True, profile_memory=True)
+            prof.start()
+            hp_model, hp_train = self.create_hp_report()
+            writer.add_hparams(hp_model)
+            writer.add_hparams(hp_train)
+        else:
+            writer = None
+            prof = None
+
+        return memory_profile, writer, prof
+    
+    def train_model(self):
+        if self.model is None:
+            raise ValueError("Set the Model First")
+
+        dual_pred = self.is_dual()
+        memory_profile, writer, prof = self.start_reports(
+                            memory_profile=self.config.train_parameters["memory_profile"],
+                            tensorboard_path=self.config.train_parameters["tensorboard_path"])
+
+        # Define Model
         train_instance = Train_NeuralNet(network=self.model,
                             learning_rate=self.config.train_parameters["learning_rate"],
                             weight_decay=self.config.train_parameters["weight_decay"],
                             loss_function=self.config.train_parameters["loss_function"],
                             )
-    
+        # Create Train data
         train_instance.create_dataset(data_df=self.config.train_parameters["train_df"],
                             data_loc=self.config.train_parameters["train_loc"],
                             data_type="train",
@@ -130,21 +180,26 @@ class Compile_Model:
                             cluster_tsv=self.config.train_parameters["cluster_tsv"],
                             dual_pred=dual_pred,
                             weighted=self.config.train_parameters["imbalance_weight"])
+        # Create Val data
         train_instance.create_dataset(data_df=self.config.train_parameters["val_df"],
                             data_loc=self.config.train_parameters["val_loc"],
                             data_type="validation",
                             cluster_sample=self.config.train_parameters["data_sample"],
                             cluster_tsv=self.config.train_parameters["cluster_tsv"],
                             dual_pred=dual_pred)
-    
+
+        # Train Model
         self.config.model_parameters["train_status"] = "Start"
         train_res, self.model = train_instance.train(epochs=self.config.train_parameters["epochs"],
                             batch_size=self.config.train_parameters["batch_size"],
                             lr_schedule=self.config.train_parameters["lr_scheduler"],
                             end_lr=self.config.train_parameters["lr_end"],
                             mixed_precision=self.config.train_parameters["mix_prec"],
-                            memory_profile=self.config.train_parameters["memory_profile"])
+                            memory_profile=memory_profile, writer=writer, profiler=prof
+                            )
     
+        
+        
         with open(self.config.train_parameters["train_results"], 'wb') as f:
             pickle.dump(train_res, f)
         if self.config.model_parameters["saved_model"]:

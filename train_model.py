@@ -1,16 +1,16 @@
 import torch
-import math
 from torch import nn
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
 from tqdm import tqdm
+#from sklearn.metrics import matthews_corrcoef
+from torchmetrics.classification import BinaryMatthewsCorrCoef
 import h5py
-import argparse
 import pickle
 import gc
 import os
-import pandas as pd
 import numpy as np
 import sys
 
@@ -77,8 +77,24 @@ class Train_NeuralNet():
                                     )
         return scheduler
 
+    def calculate_loss(self, predictions_logit, labels)
+        predictions = torch.sigmoid(predictions_logit)
+        if self.loss == torch.nn.modules.loss.BCELoss:
+            loss = self.loss_function(predictions, labels)
+        elif self.loss == torch.nn.modules.loss.BCEWithLogitsLoss:
+            loss = self.loss_function(predictions_logit, labels)
+        else:
+            raise KeyError("The loss function {} is not available".format(self.loss))
+        return predictions, loss
+    
+    @staticmethod
+    def get_mcc(pred, label):
+        return BinaryMatthewsCorrCoef(pred, label)
+
+
     def train_pass(self, train_loader, scaler, mixed_precision=False):
         loss_lst = []
+        mcc_lst = []
         prediction_lst = []
         labels_lst = []
         lr_rate_lst = []
@@ -93,17 +109,8 @@ class Train_NeuralNet():
             #  making predictions
             with torch.autocast(device_type=self.device, enabled=mixed_precision):
                 predictions_logit, attentions = self.network(embeddings, lengths)
-                predictions = torch.sigmoid(predictions_logit)
-                if self.loss == torch.nn.modules.loss.BCELoss:
-                    loss = self.loss_function(predictions, labels)
-                elif self.loss == torch.nn.modules.loss.BCEWithLogitsLoss:
-                    loss = self.loss_function(predictions_logit, labels)
-                else:
-                    raise KeyError("The loss function {} is not available".format(self.loss))
-            #  computing loss
-            loss_lst.append(loss.detach().cpu().tolist())
-            prediction_lst.extend(predictions.detach().cpu().tolist())
-            labels_lst.extend(labels.detach().cpu().tolist())
+                predictions, loss = self.calculate_loss(
+                                        predictions_logit=predictions_logit, labels=labels)
             #  computing gradients
             scaler.scale(loss).backward()
             #  updating weights
@@ -111,11 +118,20 @@ class Train_NeuralNet():
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
-            scaler.update()
+            scaler.update()          
+            #  computing loss
+            loss_c = loss.detach().cpu().tolist()
+            pred_c = predictions.detach().cpu().tolist()
+            label_c = labels.detach().cpu().tolist()
+            mcc_c = Train_NeuralNet.get_mcc(pred=np.array(pred_c), label=np.array(label_c))
+            loss_lst.append(loss_c)
+            mcc_lst.append(mcc_c)
+            prediction_lst.extend(pred_c)
+            labels_lst.extend(label_c)
             #  clean gpu (maybe unnecessary)
             torch.cuda.empty_cache()
             gc.collect()
-        return loss_lst, prediction_lst, labels_lst, lr_rate_lst
+        return loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst
 
     def val_pass(self, val_loader, last_epoch=False):
         loss_lst = []
@@ -134,12 +150,17 @@ class Train_NeuralNet():
                 embeddings, labels, lengths = embeddings.to(self.device), labels.to(self.device), lengths.to(self.device)
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
-                predictions = torch.sigmoid(predictions_logit)
+                predictions, loss = self.calculate_loss(
+                                        predictions_logit=predictions_logit, labels=labels)
                 #  computing loss
-                loss = self.loss_function(predictions, labels)
-                loss_lst.append(loss.cpu().tolist())
-                prediction_lst.extend(predictions.cpu().tolist())
-                labels_lst.extend(labels.detach().cpu().tolist())
+                loss_c = loss.detach().cpu().tolist()
+                pred_c = predictions.detach().cpu().tolist()
+                label_c = labels.detach().cpu().tolist()
+                mcc_c = Train_NeuralNet.get_mcc(pred=np.array(pred_c), label=np.array(label_c))
+                loss_lst.append(loss_c)
+                mcc_lst.append(mcc_c)
+                prediction_lst.extend(pred_c)
+                labels_lst.extend(label_c)
                 if last_epoch:
                     genome_names = batch["File_Name"]
                     att_results["Genomes"].extend(genome_names)
@@ -151,26 +172,22 @@ class Train_NeuralNet():
                 torch.cuda.empty_cache()
                 gc.collect()
         if last_epoch:
-            return loss_lst, prediction_lst, labels_lst, att_results
+            return loss_lst, mcc_lst, prediction_lst, labels_lst, att_results
         else:
-            return loss_lst, prediction_lst, labels_lst       
+            return loss_lst, mcc_lst, prediction_lst, labels_lst       
 
     def train(self, epochs, batch_size, lr_schedule=False, end_lr=3/2, mixed_precision=False,
-                memory_profile=None, save_model=None):
+                memory_profile=None, writer=None, profiler=None, num_workers=2):
 
-        if memory_profile is not None:
-            torch.cuda.memory._record_memory_history(
-                max_entries=Train_NeuralNet.MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
-                )
         log_dict = {"Epochs": dict()}
         pos_weight = self.train_dataset.get_weights()
 
         self.loss_function = self.loss()
 
         #  creating dataloaders
-        train_loader = self.load_data(self.train_dataset, batch_size, num_workers=4,
+        train_loader = self.load_data(self.train_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True)
-        val_loader = self.load_data(self.val_dataset, batch_size, num_workers=4,
+        val_loader = self.load_data(self.val_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True)
 
         if lr_schedule:
@@ -198,33 +215,51 @@ class Train_NeuralNet():
                 log_dict["Epochs"][epoch]["Validation"]["Attentions"] = list()
 
             #  training
-            loss_lst, prediction_lst, labels_lst, lr_rate_lst = self.train_pass(
-                                                        train_loader=train_loader,
-                                                        scaler=scaler,
-                                                        mixed_precision=mixed_precision)
-
+            loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst = self.train_pass(
+                                                                    train_loader=train_loader,
+                                                                    scaler=scaler,
+                                                                    mixed_precision=mixed_precision)
             log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst)
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Training"]["Labels"].extend(labels_lst)
             log_dict["Epochs"][epoch]["Learning rate"].extend(lr_rate_lst)
+            count=0 
+            for l_t_stp, m_t_stp in zip(loss_lst, mcc_lst):
+                step = count + epoch
+                writer.add_scalar('Loss/train/step', l_t_stp, step)
+                writer.add_scalar('MCC/train/step', m_t_stp, step)
+            writer.add_scalar('Loss/train/epoch', np.mean(loss_lst), epoch)
+            writer.add_scalar('MCC/train/epoch', np.mean(mcc_lst), epoch)
+
             #  validation
             print('validating...')
             if epoch >= epochs-1:
-                loss_lst, prediction_lst, labels_lst, att_results = self.val_pass(
-                                            val_loader=val_loader, last_epoch=True)
+                loss_lst, mcc_lst, prediction_lst, labels_lst, att_results = self.val_pass(
+                                                                val_loader=val_loader, last_epoch=True)
                 log_dict["Epochs"][epoch]["Validation"]["Protein Names"].extend(att_results["Proteins"])                
                 log_dict["Epochs"][epoch]["Validation"]["Genome Names"].extend(att_results["Genomes"])                
                 log_dict["Epochs"][epoch]["Validation"]["Attentions"].extend(att_results["Attentions"])                
             else:
-                loss_lst, prediction_lst, labels_lst = self.val_pass(
-                                                        val_loader=val_loader)
+                loss_lst, mcc_lst, prediction_lst, labels_lst = self.val_pass(
+                                                                    val_loader=val_loader)
             log_dict["Epochs"][epoch]["Validation"]["Loss"].extend(loss_lst)
             log_dict["Epochs"][epoch]["Validation"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Validation"]["Labels"].extend(labels_lst)
+            count=0 
+            for l_v_stp, m_v_stp in zip(loss_lst, mcc_lst):
+                step = count + epoch
+                writer.add_scalar('Loss/validation/step', l_v_stp, step)
+                writer.add_scalar('MCC/validation/step', m_v_stp, step)
+
+            writer.add_scalar('Loss/validation/epoch', np.mean(loss_lst), epoch)
+            writer.add_scalar('MCC/validation/epoch', np.mean(mcc_lst), epoch)
 
             print("training_loss: {}, validation_loss: {}, valClust_loss".format(
                 round(np.mean(log_dict["Epochs"][epoch]["Training"]['Loss']), 4), round(np.mean(log_dict["Epochs"][epoch]["Validation"]["Loss"]), 4))
             )
+        if writer is not None:
+            writer.close()
+            profiler.stop()
         if memory_profile is not None:
             torch.cuda.memory._dump_snapshot(f"{memory_profile}.pickle")
             torch.cuda.memory._record_memory_history(enabled=None)

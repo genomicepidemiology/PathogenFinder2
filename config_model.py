@@ -81,7 +81,7 @@ class ConfigModel:
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
                     "weight_decay", "lr_end", "mix_prec", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
-                    "train_results", "memory_profile"])
+                    "train_results", "memory_profile", "tensorboard_path"])
         return train_parameters
 
     def standard_init_model(self):
