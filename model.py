@@ -141,7 +141,10 @@ class Compile_Model:
         train_res, self.model = train_instance.train(epochs=self.config.train_parameters["epochs"],
                             batch_size=self.config.train_parameters["batch_size"],
                             lr_schedule=self.config.train_parameters["lr_scheduler"],
-                            end_lr=self.config.train_parameters["lr_end"])
+                            end_lr=self.config.train_parameters["lr_end"],
+                            mixed_precision=self.config.train_parameters["mix_prec"],
+                            memory_profile=self.config.train_parameters["memory_profile"])
+    
         with open(self.config.train_parameters["train_results"], 'wb') as f:
             pickle.dump(train_res, f)
         if self.config.model_parameters["saved_model"]:

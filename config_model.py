@@ -52,8 +52,15 @@ class ConfigModel:
 
         self.model_type = model_type
         
+        self.misc_parameters = self.init_misc_parameters()
         self.model_parameters = self.init_model_parameters()
         self.train_parameters = self.init_train_parameters()
+
+    def init_misc_parameters(self):
+        misc_parameters = ParamsModel(name_params="Misc Parameters")
+        misc_parameters.init_params(
+                list_params=["Notes"])
+        return misc_parameters
 
     def init_model_parameters(self):
         model_parameters = ParamsModel(name_params="Model Parameters")
@@ -72,9 +79,9 @@ class ConfigModel:
         train_parameters.init_params(
                 list_params=["batch_size", "optimizer", "learning_rate",
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
-                    "weight_decay", "lr_end", "data_sample", "cluster_tsv", "prot_dim_split",
+                    "weight_decay", "lr_end", "mix_prec", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
-                    "train_results"])
+                    "train_results", "memory_profile"])
         return train_parameters
 
     def standard_init_model(self):
@@ -120,6 +127,7 @@ class ConfigModel:
         self.train_parameters.set_param(param="imbalance_weight", value=args.imbalance_weight, type_d=float)
         self.train_parameters.set_param(param="imbalance_sample", value=args.imbalance_sample, type_d=float)
         self.train_parameters.set_param(param="lr_end", value=args.lr_end, type_d=float)
+        self.train_parameters.set_param(param="mix_prec", value=args.precision, type_d=bool)
         self.train_parameters.set_param(param="data_sample", value=args.data_sample, type_d=bool)
         self.train_parameters.set_param(param="cluster_tsv", value=args.cluster_tsv, type_d=str)
         self.train_parameters.set_param(param="prot_dim_split", value=args.prot_dim_split, type_d=int)
@@ -128,6 +136,7 @@ class ConfigModel:
         self.train_parameters.set_param(param="val_df", value=args.val_df, type_d=str)
         self.train_parameters.set_param(param="val_loc", value=args.val_loc, type_d=str)
         self.train_parameters.set_param(param="train_results", value=args_train_res, type_d=str)
+        self.train_parameters.set_param(param="memory_profile", value=args.memory_profile, type_d=str)
 
     def load_json_params(self, json_file):
         with open(json_file, "r") as f:
@@ -195,6 +204,7 @@ class ConfigModel:
         parser_train.add_argument("-sc", "--lr_scheduler", help="scheduler", action="store_true")
         parser_train.add_argument("-w", "--weight_decay", help="weight decay")
         parser_train.add_argument("-lr_e", "--lr_end", help="end value of lr with scheduler")
+        parser_train.add_argument("-m_p", "--mixed_precision", help="mixed_precision", action="store_true")
         parser_train.add_argument("-d_s", "--data_sample", help="sample data", action="store_true")
         parser_train.add_argument("-p", "--prot_dim_split", help="sample data", action="store_true")
         parser_train.add_argument("-tr_d", "--train_df", help="train_df")
@@ -203,6 +213,7 @@ class ConfigModel:
         parser_train.add_argument("-val_l", "--val_loc", help="val_loc")
         parser_train.add_argument("-clust", "--cluster_tsv", help="cluster_tsv")
         parser_train.add_argument("-res", "--train_res", help="train results")
+        parser_train.add_argument("-mem_p", "--memory_profile", help="memory profiling")
         parser_train.add_argument("-imb_w", "--imbalance_weight", help="imbalance weight")
         parser_train.add_argument("-imb_s", "--imbalance_sample", help="imbalance sample")
 

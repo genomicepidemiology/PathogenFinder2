@@ -150,20 +150,24 @@ class ProteomeDataset(Dataset):
     @staticmethod
     def open_embedfile(file):
         numpy_type = np.float32
-        protein_names = []
         with h5py.File(file, "r") as f:
-            if "Amount Proteins" in f:
+            if "Embeddings" in f:
                 len_proteome = np.zeros(1, dtype=np.int32)
-                f["Amount Proteins"].read_direct(len_proteome)
+                len_proteome[:] = f.attrs["Amount Embeddings"]
             else:
                 len_proteome = np.array([len(f.keys())])
             shape=(len_proteome[0], ProteomeDataset.dimension_embedding)
             embeddings = np.zeros(shape, dtype=numpy_type)
-            count = 0
-            for prot in f.keys():
-              protein_names.append(prot)
-              n1 = np.zeros(1024, dtype=numpy_type)
-              f[prot].read_direct(n1)
-              embeddings[count, :] = n1
-              count += 1
+            if "Embeddings" in f:
+                protein_names = np.empty(len_proteome[0], dtype=object)
+                f["Embeddings"].read_direct(embeddings)
+                f["Names"].read_direct(protein_names)
+            else:
+                protein_names = []
+                for prot in f.keys():
+                    protein_names.append(prot)
+                    n1 = np.zeros(1024, dtype=numpy_type)
+                    f[prot].read_direct(n1)
+                    embeddings[count, :] = n1
+                    count += 1        
         return embeddings, len_proteome, protein_names

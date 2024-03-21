@@ -32,6 +32,8 @@ class Train_NeuralNet():
         self.loss = loss_function
         self.train_dataset = None
         self.val_dataset = None
+        torch.cuda.empty_cache() 
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
     def get_device(self):
         if torch.cuda.is_available():
@@ -73,7 +75,7 @@ class Train_NeuralNet():
                                     )
         return scheduler
 
-    def train_pass(self, train_loader):
+    def train_pass(self, train_loader, scaler, mixed_precision=False):
         loss_lst = []
         prediction_lst = []
         labels_lst = []
@@ -85,25 +87,29 @@ class Train_NeuralNet():
             #  sending data to device
             embeddings, labels, lengths = embeddings.to(self.device), labels.to(self.device), lengths.to(self.device)
             #  resetting gradients
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
             #  making predictions
-            predictions_logit, attentions = self.network(embeddings, lengths)
-            predictions = torch.sigmoid(predictions_logit)
-            if self.loss_function == nn.BCELoss():
-                loss = self.loss_function(predictions, labels)
-            else:
-                loss = self.loss_function(predictions_logit, labels)
+            with torch.autocast(device_type=self.device, enabled=mixed_precision):
+                predictions_logit, attentions = self.network(embeddings, lengths)
+                predictions = torch.sigmoid(predictions_logit)
+                if self.loss == torch.nn.modules.loss.BCELoss:
+                    loss = self.loss_function(predictions, labels)
+                elif self.loss == torch.nn.modules.loss.BCEWithLogitsLoss:
+                    loss = self.loss_function(predictions_logit, labels)
+                else:
+                    raise KeyError("The loss function {} is not available".format(self.loss))
             #  computing loss
             loss_lst.append(loss.detach().cpu().tolist())
             prediction_lst.extend(predictions.detach().cpu().tolist())
             labels_lst.extend(labels.detach().cpu().tolist())
             #  computing gradients
-            loss.backward()
+            scaler.scale(loss).backward()
             #  updating weights
-            self.optimizer.step()
+            scaler.step(self.optimizer)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
+            scaler.update()
             #  clean gpu (maybe unnecessary)
             torch.cuda.empty_cache()
             gc.collect()
@@ -117,7 +123,7 @@ class Train_NeuralNet():
             att_results = {"Genomes": [], "Proteins":[], "Attentions": []}
         else:
             att_results = None
-        with torch.no_grad():
+        with torch.inference():
             for batch in tqdm(val_loader):
                 embeddings = batch["Embeddings"]
                 labels = batch["Pathogen_Label"]
@@ -145,14 +151,18 @@ class Train_NeuralNet():
         if last_epoch:
             return loss_lst, prediction_lst, labels_lst, att_results
         else:
-            return loss_lst, prediction_lst, labels_lst        
+            return loss_lst, prediction_lst, labels_lst       
 
-    def train(self, epochs, batch_size, lr_schedule=False, end_lr=3/2, save_model=None):
+    def train(self, epochs, batch_size, lr_schedule=False, end_lr=3/2, mixed_precision=False,
+                memory_profile=None, save_model=None):
 
+        if memory_profile is not None:
+            torch.cuda.memory._record_memory_history(
+                max_entries=MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
+                )
         log_dict = {"Epochs": dict()}
         pos_weight = self.train_dataset.get_weights()
 
-        #self.loss_function = self.loss(pos_weight=pos_weight.to(self.device))
         self.loss_function = self.loss()
 
         #  creating dataloaders
@@ -167,7 +177,7 @@ class Train_NeuralNet():
         else:
             self.lr_scheduler = None
 
-
+        scaler = torch.cuda.amp.GradScaler(enabled=mixed_precision)
 
         for epoch in range(epochs):
             print(f'Epoch {epoch+1}/{epochs}') 
@@ -187,7 +197,9 @@ class Train_NeuralNet():
 
             #  training
             loss_lst, prediction_lst, labels_lst, lr_rate_lst = self.train_pass(
-                                                        train_loader=train_loader)
+                                                        train_loader=train_loader,
+                                                        scaler=scaler,
+                                                        mixed_precision=mixed_precision)
 
             log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst)
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
@@ -211,12 +223,13 @@ class Train_NeuralNet():
             print("training_loss: {}, validation_loss: {}, valClust_loss".format(
                 round(np.mean(log_dict["Epochs"][epoch]["Training"]['Loss']), 4), round(np.mean(log_dict["Epochs"][epoch]["Validation"]["Loss"]), 4))
             )
-        
-        if save_model is not None:
-            torch.save(self.network, '{}'.format(save_model))
+        if memory_profile is not None:
+            torch.cuda.memory._dump_snapshot(f"{memory_profile}.pickle")
+            torch.cuda.memory._record_memory_history(enabled=None)
         return log_dict, self.network
 
     def predict(self, x):
-        logits = self.network(x)
+        with torch.inference():
+            logits = self.network(x)
         return torch.sigmoid(logits)
 
