@@ -164,6 +164,7 @@ class ProteomeDataset(Dataset):
                 f["Names"].read_direct(protein_names)
             else:
                 protein_names = []
+                count = 0
                 for prot in f.keys():
                     protein_names.append(prot)
                     n1 = np.zeros(1024, dtype=numpy_type)

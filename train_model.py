@@ -24,15 +24,16 @@ class Train_NeuralNet():
 
     def __init__(self, network, learning_rate=1e-5, weight_decay=1e-4, amsgrad=False,
                 loss_function=None):
-        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, roundup_power2_divisions:True, garbage_collection_threshold:0.6'
-        torch.cuda.empty_cache() 
+
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6' 
+        torch.cuda.empty_cache()
 
         self.device = self.get_device()
         self.network = network.to(self.device)
+
         self.optimizer = torch.optim.Adam(self.network.parameters(),
                                             lr=learning_rate, weight_decay=weight_decay,
                                             amsgrad=amsgrad)
-
         self.loss = loss_function
         self.train_dataset = None
         self.val_dataset = None
