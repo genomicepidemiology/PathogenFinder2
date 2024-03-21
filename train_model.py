@@ -20,6 +20,8 @@ from data_utils import ProteomeDataset, ToTensor
 
 
 class Train_NeuralNet():
+    MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
+
     def __init__(self, network, learning_rate=1e-5, weight_decay=1e-4, amsgrad=False,
                 loss_function=None):
 
@@ -158,7 +160,7 @@ class Train_NeuralNet():
 
         if memory_profile is not None:
             torch.cuda.memory._record_memory_history(
-                max_entries=MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
+                max_entries=Train_NeuralNet.MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
                 )
         log_dict = {"Epochs": dict()}
         pos_weight = self.train_dataset.get_weights()
