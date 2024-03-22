@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
 from tqdm import tqdm
@@ -178,7 +177,7 @@ class Train_NeuralNet():
             return loss_lst, mcc_lst, prediction_lst, labels_lst       
 
     def train(self, epochs, batch_size, lr_schedule=False, end_lr=3/2, mixed_precision=False,
-                memory_profile=None, writer=None, profiler=None, num_workers=2):
+                memory_profile=None, profiler=None, num_workers=2):
 
         log_dict = {"Epochs": dict()}
         pos_weight = self.train_dataset.get_weights()
@@ -224,13 +223,6 @@ class Train_NeuralNet():
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Training"]["Labels"].extend(labels_lst)
             log_dict["Epochs"][epoch]["Learning rate"].extend(lr_rate_lst)
-            count=0 
-            for l_t_stp, m_t_stp in zip(loss_lst, mcc_lst):
-                step = count + epoch
-                writer.add_scalar('Loss/train/step', l_t_stp, step)
-                writer.add_scalar('MCC/train/step', m_t_stp, step)
-            writer.add_scalar('Loss/train/epoch', np.mean(loss_lst), epoch)
-            writer.add_scalar('MCC/train/epoch', np.mean(mcc_lst), epoch)
 
             #  validation
             print('validating...')
@@ -246,24 +238,10 @@ class Train_NeuralNet():
             log_dict["Epochs"][epoch]["Validation"]["Loss"].extend(loss_lst)
             log_dict["Epochs"][epoch]["Validation"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Validation"]["Labels"].extend(labels_lst)
-            count=0 
-            for l_v_stp, m_v_stp in zip(loss_lst, mcc_lst):
-                step = count + epoch
-                writer.add_scalar('Loss/validation/step', l_v_stp, step)
-                writer.add_scalar('MCC/validation/step', m_v_stp, step)
-
-            writer.add_scalar('Loss/validation/epoch', np.mean(loss_lst), epoch)
-            writer.add_scalar('MCC/validation/epoch', np.mean(mcc_lst), epoch)
 
             print("training_loss: {}, validation_loss: {}, valClust_loss".format(
                 round(np.mean(log_dict["Epochs"][epoch]["Training"]['Loss']), 4), round(np.mean(log_dict["Epochs"][epoch]["Validation"]["Loss"]), 4))
             )
-        if writer is not None:
-            writer.close()
-            profiler.stop()
-        if memory_profile is not None:
-            torch.cuda.memory._dump_snapshot(f"{memory_profile}.pickle")
-            torch.cuda.memory._record_memory_history(enabled=None)
         return log_dict, self.network
 
     def predict(self, x):

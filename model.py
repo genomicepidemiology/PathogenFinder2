@@ -125,46 +125,51 @@ class Compile_Model:
                 hp_model[k] = str(v)
         hp_train = {}
         for k, v in self.config.train_parameters:
-            if v in params_str:
+            if isinstance(v, list):
+                hp_train[k] = ", ".join(v)
+            elif v in params_str:
                 hp_train[k] = params_str[v]
             else:
                 hp_train[k] = str(v)
         return hp_model, hp_train
     
-    def start_reports(self, memory_profile, tensorboard_path):
-        if memory_profile is not None:
+    def start_memory_reports(self, memory_report):
+        if memory_report is not None:
             torch.cuda.memory._record_memory_history(
                 max_entries=Train_NeuralNet.MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
                 )
-        else:
-            memory_profile = None
-
-        if tensorboard_path is not None:
-            timestamp = str(datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
-            log_dir = "{}_run_{}".format(tensorboard_path, timestamp)
-            writer = SummaryWriter(log_dir=log_dir)
             prof = torch.profiler.profile(
                         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-                        on_trace_ready=torch.profiler.tensorboard_trace_handler("{}_profiler.log".format(log_dir)),
+                        on_trace_ready=torch.profiler.tensorboard_trace_handler("{}_profiler.log".format(memory_report)),
                         record_shapes=True, with_stack=True, profile_memory=True)
-            prof.start()
-            hp_model, hp_train = self.create_hp_report()
-            writer.add_hparams(hp_model)
-            writer.add_hparams(hp_train)
         else:
-            writer = None
             prof = None
 
-        return memory_profile, writer, prof
+        return prof
     
-    def train_model(self):
+    def set_results_files(self):
+        timestamp = str(datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
+        if self.config.train_parameters["train_results"] is not None:
+            train_res_log = "{}_{}".format(self.config.train_parameters["train_results"],
+                                            timestamp)
+            self.config.train_parameters["train_results"] = train_res_log
+        if self.config.train_parameters["memory_report"] is not None:
+            memory_rep_log = "{}_{}".format(self.config.train_parameters["memory_report"],
+                                            timestamp)
+            self.config.train_parameters["memory_report"] = memory_rep_log
+    
+    def train_model(self, report="dictionary"):
         if self.model is None:
             raise ValueError("Set the Model First")
+        if report not in ["dictionary", "wandb", "tensorboard"]:
+            raise KeyError("The type of report {} is not available".format(report))
+
+        self.set_results_files()
+
+        prof = self.start_memory_reports(
+                                memory_report=self.config.train_parameters["memory_profile"])
 
         dual_pred = self.is_dual()
-        memory_profile, writer, prof = self.start_reports(
-                            memory_profile=self.config.train_parameters["memory_profile"],
-                            tensorboard_path=self.config.train_parameters["tensorboard_path"])
 
         # Define Model
         train_instance = Train_NeuralNet(network=self.model,
@@ -195,9 +200,13 @@ class Compile_Model:
                             lr_schedule=self.config.train_parameters["lr_scheduler"],
                             end_lr=self.config.train_parameters["lr_end"],
                             mixed_precision=self.config.train_parameters["mix_prec"],
-                            memory_profile=memory_profile, writer=writer, profiler=prof
-                            )
-    
+                            memory_profile=self.config.train_parameters["memory_profile"],
+                            profiler=prof)
+        
+        if self.config.train_parameters["memory_profile"] is not None:
+            prof.stop()
+            torch.cuda.memory._dump_snapshot(f"{self.config.train_parameters["memory_profile"]}")
+            torch.cuda.memory._record_memory_history(enabled=None)    
         
         
         with open(self.config.train_parameters["train_results"], 'wb') as f:

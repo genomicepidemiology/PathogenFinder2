@@ -81,7 +81,7 @@ class ConfigModel:
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
                     "weight_decay", "lr_end", "mix_prec", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
-                    "train_results", "memory_profile", "tensorboard_path"])
+                    "train_results", "memory_report",])
         return train_parameters
 
     def standard_init_model(self):
@@ -136,7 +136,7 @@ class ConfigModel:
         self.train_parameters.set_param(param="val_df", value=args.val_df, type_d=str)
         self.train_parameters.set_param(param="val_loc", value=args.val_loc, type_d=str)
         self.train_parameters.set_param(param="train_results", value=args_train_res, type_d=str)
-        self.train_parameters.set_param(param="memory_profile", value=args.memory_profile, type_d=str)
+        self.train_parameters.set_param(param="memory_report", value=args.memory_report, type_d=str)
 
     def load_json_params(self, json_file):
         with open(json_file, "r") as f:
@@ -213,7 +213,7 @@ class ConfigModel:
         parser_train.add_argument("-val_l", "--val_loc", help="val_loc")
         parser_train.add_argument("-clust", "--cluster_tsv", help="cluster_tsv")
         parser_train.add_argument("-res", "--train_res", help="train results")
-        parser_train.add_argument("-mem_p", "--memory_profile", help="memory profiling")
+        parser_train.add_argument("-mem_p", "--memory_report", help="memory profiling")
         parser_train.add_argument("-imb_w", "--imbalance_weight", help="imbalance weight")
         parser_train.add_argument("-imb_s", "--imbalance_sample", help="imbalance sample")
 
