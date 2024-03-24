@@ -7,7 +7,17 @@ import argparse
 import types
 from collections import UserDict
 
-from utils import is_valid_file, NNEncoder
+from utils import is_valid_file
+
+class NNEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, nn.ReLU) or isinstance(obj, nn.LeakyReLU) or isinstance(obj, nn.Tanh) or isinstance(obj, torch.nn.modules.loss.BCEWithLogitsLoss):
+            return str(obj)
+        if isinstance(obj, types.FunctionType):
+            return obj.__name__
+        if obj.__class__.__name__ == "type":
+            return obj.__name__
+        return super(NNEncoder, self).default(obj)
 
 class ParamsModel(UserDict):
 
@@ -81,7 +91,7 @@ class ConfigModel:
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
                     "weight_decay", "lr_end", "mix_prec", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
-                    "train_results", "memory_report",])
+                    "train_results", "memory_report", "results_dir"])
         return train_parameters
 
     def standard_init_model(self):
@@ -149,8 +159,8 @@ class ConfigModel:
                     self.train_parameters.set_param(param=k, value=val)
     
     def save_data(self, file_save):
-        data_save = {"Model Params": self.model_parameters,
-                    "Train Params": self.train_parameters}
+        data_save = {"Model Params": dict(self.model_parameters),
+                    "Train Params": dict(self.train_parameters)}
         with open(file_save, 'w') as f:
             json.dump(data_save, f, cls=NNEncoder)
 

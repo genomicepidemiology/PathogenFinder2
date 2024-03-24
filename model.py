@@ -12,6 +12,7 @@ import os
 import pandas as pd
 import numpy as np
 import sys
+from datetime import datetime
 
 sys.dont_write_bytecode = True
 
@@ -132,50 +133,21 @@ class Compile_Model:
             else:
                 hp_train[k] = str(v)
         return hp_model, hp_train
-    
-    def start_memory_reports(self, memory_report):
-        if memory_report is not None:
-            torch.cuda.memory._record_memory_history(
-                max_entries=Train_NeuralNet.MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
-                )
-            prof = torch.profiler.profile(
-                        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-                        on_trace_ready=torch.profiler.tensorboard_trace_handler("{}_profiler.log".format(memory_report)),
-                        record_shapes=True, with_stack=True, profile_memory=True)
-        else:
-            prof = None
-
-        return prof
-    
-    def set_results_files(self):
-        timestamp = str(datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
-        if self.config.train_parameters["train_results"] is not None:
-            train_res_log = "{}_{}".format(self.config.train_parameters["train_results"],
-                                            timestamp)
-            self.config.train_parameters["train_results"] = train_res_log
-        if self.config.train_parameters["memory_report"] is not None:
-            memory_rep_log = "{}_{}".format(self.config.train_parameters["memory_report"],
-                                            timestamp)
-            self.config.train_parameters["memory_report"] = memory_rep_log
-    
+        
     def train_model(self, report="dictionary"):
         if self.model is None:
             raise ValueError("Set the Model First")
         if report not in ["dictionary", "wandb", "tensorboard"]:
             raise KeyError("The type of report {} is not available".format(report))
 
-        self.set_results_files()
-
-        prof = self.start_memory_reports(
-                                memory_report=self.config.train_parameters["memory_profile"])
-
         dual_pred = self.is_dual()
-
         # Define Model
         train_instance = Train_NeuralNet(network=self.model,
                             learning_rate=self.config.train_parameters["learning_rate"],
                             weight_decay=self.config.train_parameters["weight_decay"],
                             loss_function=self.config.train_parameters["loss_function"],
+                            results_dir=self.config.train_parameters["results_dir"],
+                            memory_report=True
                             )
         # Create Train data
         train_instance.create_dataset(data_df=self.config.train_parameters["train_df"],
@@ -195,28 +167,18 @@ class Compile_Model:
 
         # Train Model
         self.config.model_parameters["train_status"] = "Start"
-        train_res, self.model = train_instance.train(epochs=self.config.train_parameters["epochs"],
+        train_res = train_instance.train(epochs=self.config.train_parameters["epochs"],
                             batch_size=self.config.train_parameters["batch_size"],
                             lr_schedule=self.config.train_parameters["lr_scheduler"],
                             end_lr=self.config.train_parameters["lr_end"],
-                            mixed_precision=self.config.train_parameters["mix_prec"],
-                            memory_profile=self.config.train_parameters["memory_profile"],
-                            profiler=prof)
-        
-        if self.config.train_parameters["memory_profile"] is not None:
-            prof.stop()
-            torch.cuda.memory._dump_snapshot(f"{self.config.train_parameters["memory_profile"]}")
-            torch.cuda.memory._record_memory_history(enabled=None)    
-        
-        
-        with open(self.config.train_parameters["train_results"], 'wb') as f:
-            pickle.dump(train_res, f)
+                            mixed_precision=self.config.train_parameters["mix_prec"])
+        if report == "dictionary":
+            train_instance.savedict_train_results(train_res)      
+
         if self.config.model_parameters["saved_model"]:
             self.save_model(self.config.model_parameters["saved_model"])
-        self.config.model_parameters["train_status"] = "Done"
-
-        return True        
-        
+        self.config.model_parameters["train_status"] 
+        return train_instance.results_dir
                   
 
 if __name__ == "__main__":
@@ -230,12 +192,10 @@ if __name__ == "__main__":
         compiled_model.load_train_params(args=model_arguments)
     compiled_model.set_model()
 
+    config = compiled_model.get_config()
+
     if model_arguments.train:
-        compiled_model.train_model()
+        results_dir_train = compiled_model.train_model()
+        config.save_data("{}/config_file.json".format(results_dir_train))
     elif model_arguments.predict:
         pass
-
-    config = compiled_model.get_config()
-    config.save_data("./config_demo.json")
-
-

@@ -46,6 +46,7 @@
         "train_loc": "/work3/alff/embeddings/data/",
         "val_df": "/work3/alff/embeddings/metadata/repr_metadataTEST90.tsv",
         "val_loc": "/work3/alff/embeddings/data/",
-    	"train_results": "/work3/alff/results_pathogenfinder2/model_train_l3",
-        "memory_report": "/work3/alff/results_pathogenfinder2/model_train_memory_report"}
+    	"train_results": "dictionary",
+        "memory_report": true,
+        "results_dir": "/work3/alff/results_pathogenfinder2/model_train_l3/"}
 }
