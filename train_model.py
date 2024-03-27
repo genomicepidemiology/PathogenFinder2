@@ -54,15 +54,15 @@ class Train_NeuralNet():
                                             lr=learning_rate, weight_decay=weight_decay,
                                             amsgrad=amsgrad)
         if lr_schedule:
-            self.lr_scheduler = self.set_schedule_lr(optimizer=optimizer, end_lr=end_lr,
-                                            epochs=epochs, steps=step)
+            self.lr_scheduler = self.set_schedule_lr(optimizer=self.optimizer, end_lr=end_lr,
+                                            epochs=epochs, steps=steps, max_lr=learning_rate)
         else:
             self.lr_scheduler = None
 
 
-    def set_schedule_lr(self, optimizer, epochs, steps, end_lr=3/2):
+    def set_schedule_lr(self, optimizer, epochs, steps, max_lr, end_lr=3/2):
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
-                                    max_lr=optimizer.param_groups[-1]['lr'],
+                                    max_lr=max_lr,
                                     epochs=epochs, steps_per_epoch=steps,
                                     )
         return scheduler
@@ -125,14 +125,6 @@ class Train_NeuralNet():
         return DataLoader(data_set, batch_size=batch_size, num_workers=num_workers,
                               collate_fn=ProteomeDataset.collate_fn_mask,
                               shuffle=shuffle, persistent_workers=False, pin_memory=pin_memory)
-
-    def set_schedule_lr(self, epochs, steps, end_lr=3/2):
-        
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer,
-                                    max_lr=self.optimizer.param_groups[-1]['lr'],
-                                    epochs=epochs, steps_per_epoch=steps, 
-                                    )
-        return scheduler
 
     def calculate_loss(self, predictions_logit, labels):
         predictions = torch.sigmoid(predictions_logit)
@@ -289,9 +281,7 @@ class Train_NeuralNet():
             loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler = self.train_pass(
                                                                     train_loader=train_loader,
                                                                     scaler=scaler,
-                                                                    mixed_precision=mixed_precision,
-                                                                    fused_OptBack=fused_OptBack
-                                                                    )
+                                                                    mixed_precision=mixed_precision,)
             log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst)
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Training"]["Labels"].extend(labels_lst)
