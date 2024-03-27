@@ -145,7 +145,8 @@ class Compile_Model:
         train_instance = Train_NeuralNet(network=self.model,
                             loss_function=self.config.train_parameters["loss_function"],
                             results_dir=self.config.train_parameters["results_dir"],
-                            memory_report=True)
+                            memory_report=self.config.train_parameters["memory_report"],
+                            compiler=self.config.train_parameters["compiler"])
         # Create Train data
         train_instance.create_dataset(data_df=self.config.train_parameters["train_df"],
                             data_loc=self.config.train_parameters["train_loc"],
@@ -172,7 +173,8 @@ class Compile_Model:
                             end_lr=self.config.train_parameters["lr_end"],
                             amsgrad=False, num_workers=2,
                             mixed_precision=self.config.train_parameters["mix_prec"],
-                            asynchronity=self.config.train_parameters["asynchronity"])
+                            asynchronity=self.config.train_parameters["asynchronity"],
+			    )
 
         if report == "dictionary":
             train_instance.savedict_train_results(train_res)      

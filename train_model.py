@@ -24,7 +24,7 @@ class Train_NeuralNet():
 
     def __init__(self, network, optimizer=torch.optim.Adam, results_train="dictionary", learning_rate=1e-5,
                 weight_decay=1e-4, amsgrad=False, loss_function=None, results_dir=None,
-                memory_report=False, train_results="dictionary", fused_OptBack=False):
+                memory_report=False, train_results="dictionary", compiler=None):
 
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6' 
         torch.cuda.empty_cache()
@@ -37,7 +37,11 @@ class Train_NeuralNet():
 
 
         self.device = self.get_device()
-        self.network = network.to(self.device)
+        network = network.to(self.device)
+        if compiler is None:
+            self.network = network
+        else:
+            self.network = torch.compile(network, mode=compiler, dynamic=True)
         self.loss = loss_function
         self.train_dataset = None
         self.val_dataset = None
@@ -260,6 +264,7 @@ class Train_NeuralNet():
                 weight_decay=weight_decay, lr_schedule=lr_schedule, end_lr=end_lr, amsgrad=amsgrad, fused_OptBack=fused_OptBack)
 
         scaler = torch.cuda.amp.GradScaler(enabled=mixed_precision)
+
 
         for epoch in range(epochs):
             print(f'Epoch {epoch+1}/{epochs}') 
