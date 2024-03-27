@@ -22,9 +22,9 @@ from data_utils import ProteomeDataset, ToTensor
 class Train_NeuralNet():
     MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
 
-    def __init__(self, network, results_train="dictionary", learning_rate=1e-5,
+    def __init__(self, network, optimizer=torch.optim.Adam, results_train="dictionary", learning_rate=1e-5,
                 weight_decay=1e-4, amsgrad=False, loss_function=None, results_dir=None,
-                memory_report=False, train_results="dictionary"):
+                memory_report=False, train_results="dictionary", fused_OptBack=False):
 
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6' 
         torch.cuda.empty_cache()
@@ -38,8 +38,13 @@ class Train_NeuralNet():
 
         self.device = self.get_device()
         self.network = network.to(self.device)
-
-        self.optimizer = torch.optim.Adam(self.network.parameters(),
+        if fused_OptBack:
+            self.optimizer = {p: optimizer([p], foreach=False, lr=learning_rate, weight_decay=weight_decay, amsgrad=amsgrad
+                                            ) for p in self.network.parameters()}
+            for p in self.network.parameters():
+                p.register_post_accumulate_grad_hook(Train_NeuralNet.optimizer_hook)
+        else:
+            self.optimizer = optimizer(self.network.parameters(),
                                             lr=learning_rate, weight_decay=weight_decay,
                                             amsgrad=amsgrad)
         self.loss = loss_function
@@ -51,9 +56,9 @@ class Train_NeuralNet():
         torch.cuda.memory._record_memory_history(
             max_entries=Train_NeuralNet.MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT)
         prof = torch.profiler.profile(
-                       # schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+                        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3),
                         on_trace_ready=torch.profiler.tensorboard_trace_handler("{}".format(memory_report)),
-                        record_shapes=True, with_stack=True, profile_memory=True)
+                        record_shapes=True, with_stack=False, profile_memory=True)
         prof.start()
         return prof
 
@@ -100,10 +105,10 @@ class Train_NeuralNet():
             raise ValueError("The data_type {} is not an option (choose between train and val)".format(
                                 data_type))
 
-    def load_data(self, data_set, batch_size, num_workers=4, shuffle=True):
+    def load_data(self, data_set, batch_size, num_workers=4, shuffle=True, pin_memory=False):
         return DataLoader(data_set, batch_size=batch_size, num_workers=num_workers,
                               collate_fn=ProteomeDataset.collate_fn_mask,
-                              shuffle=shuffle, persistent_workers=False, pin_memory=False)
+                              shuffle=shuffle, persistent_workers=False, pin_memory=pin_memory)
 
     def set_schedule_lr(self, epochs, steps, end_lr=3/2):
         
@@ -122,8 +127,13 @@ class Train_NeuralNet():
         else:
             raise KeyError("The loss function {} is not available".format(self.loss))
         return predictions, loss
+
+    @staticmethod
+    def optimizer_hook(parameter):
+        optimizer_dict[parameter].step()
+        optimizer_dict[parameter].zero_grad()
     
-    def train_pass(self, train_loader, scaler, mixed_precision=False, profiler=None):
+    def train_pass(self, train_loader, scaler, mixed_precision=False, profiler=None, asynchronity=False):
         mcc_calc = BinaryMatthewsCorrCoef()
         loss_lst = []
         mcc_lst = []
@@ -131,11 +141,15 @@ class Train_NeuralNet():
         labels_lst = []
         lr_rate_lst = []
         for batch in tqdm(train_loader):
+            if self.profiler is not None:
+                self.profiler.step()
             embeddings = batch["Embeddings"]
             labels = batch["Pathogen_Label"]
             lengths = batch["Length_Proteome"]
             #  sending data to device
-            embeddings, labels, lengths = embeddings.to(self.device), labels.to(self.device), lengths.to(self.device)
+            embeddings = embeddings.to(self.device, non_blocking=asynchronity)
+            labels = labels.to(self.device, non_blocking=asynchronity)
+            lengths = lengths.to(self.device, non_blocking=asynchronity)
             #  resetting gradients
             self.optimizer.zero_grad(set_to_none=True)
             #  making predictions
@@ -146,9 +160,10 @@ class Train_NeuralNet():
             #  computing gradients
             scaler.scale(loss).backward()
             #  updating weights
-            scaler.step(self.optimizer)
-            if self.profiler is not None:
-                self.profiler.step()
+            if isinstance(self.optimizer, dict):
+                pass
+            else:
+                scaler.step(self.optimizer)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
@@ -163,11 +178,11 @@ class Train_NeuralNet():
             prediction_lst.extend(pred_c.tolist())
             labels_lst.extend(label_c.tolist())
             #  clean gpu (maybe unnecessary)
-            torch.cuda.empty_cache()
-            gc.collect()
+            #torch.cuda.empty_cache()
+            #gc.collect()
         return loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler
 
-    def val_pass(self, val_loader, last_epoch=False, profiler=None):
+    def val_pass(self, val_loader, last_epoch=False, profiler=None, asynchronity=False):
         mcc_calc = BinaryMatthewsCorrCoef()
         loss_lst = []
         mcc_lst = []
@@ -179,17 +194,20 @@ class Train_NeuralNet():
             att_results = None
         with torch.inference_mode():
             for batch in tqdm(val_loader):
+                if self.profiler is not None:
+                    print("MEH")
+                    self.profiler.step()
                 embeddings = batch["Embeddings"]
                 labels = batch["Pathogen_Label"]
                 lengths = batch["Length_Proteome"]
                 #  sending data to device
-                embeddings, labels, lengths = embeddings.to(self.device), labels.to(self.device), lengths.to(self.device)
+                embeddings = embeddings.to(self.device, non_blocking=asynchronity)
+                labels = labels.to(self.device, non_blocking=asynchronity)
+                lengths = lengths.to(self.device, non_blocking=asynchronity)
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(
                                         predictions_logit=predictions_logit, labels=labels)
-                if self.profiler is not None:
-                    self.profiler.step()
                 #  computing loss
                 loss_c = loss.detach().cpu().tolist()
                 pred_c = predictions.detach().cpu()
@@ -207,15 +225,15 @@ class Train_NeuralNet():
                     attentions = attentions.detach().cpu().numpy()
                     att_results["Attentions"].append(attentions)
                 #  clean gpu (maybe unnecessary)
-                torch.cuda.empty_cache()
-                gc.collect()
+                #torch.cuda.empty_cache()
+                #gc.collect()
         if last_epoch:
             return loss_lst, mcc_lst, prediction_lst, labels_lst, att_results, profiler
         else:
             return loss_lst, mcc_lst, prediction_lst, labels_lst, profiler       
 
     def train(self, epochs, batch_size, lr_schedule=False, end_lr=3/2, mixed_precision=False,
-               num_workers=2):
+               num_workers=2, asynchronity=False):
 
         log_dict = {"Epochs": dict()}
         pos_weight = self.train_dataset.get_weights()
@@ -224,9 +242,9 @@ class Train_NeuralNet():
 
         #  creating dataloaders
         train_loader = self.load_data(self.train_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True)
+                                        shuffle=True, pin_memory=asynchronity)
         val_loader = self.load_data(self.val_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True)
+                                        shuffle=True, pin_memory=asynchronity)
 
         if lr_schedule:
             self.lr_scheduler = self.set_schedule_lr(end_lr=end_lr, epochs=epochs,
@@ -257,6 +275,7 @@ class Train_NeuralNet():
                                                                     train_loader=train_loader,
                                                                     scaler=scaler,
                                                                     mixed_precision=mixed_precision,
+                                                                    fused_OptBack=fused_OptBack
                                                                     )
             log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst)
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
