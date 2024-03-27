@@ -38,6 +38,12 @@ class Train_NeuralNet():
 
         self.device = self.get_device()
         self.network = network.to(self.device)
+        self.loss = loss_function
+        self.train_dataset = None
+        self.val_dataset = None
+
+    def set_optimizer(self, epochs, steps, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
+                        lr_schedule=False, end_lr=3/2, amsgrad=False, fused_OptBack=False):
         if fused_OptBack:
             self.optimizer = {p: optimizer([p], foreach=False, lr=learning_rate, weight_decay=weight_decay, amsgrad=amsgrad
                                             ) for p in self.network.parameters()}
@@ -47,9 +53,19 @@ class Train_NeuralNet():
             self.optimizer = optimizer(self.network.parameters(),
                                             lr=learning_rate, weight_decay=weight_decay,
                                             amsgrad=amsgrad)
-        self.loss = loss_function
-        self.train_dataset = None
-        self.val_dataset = None
+        if lr_schedule:
+            self.lr_scheduler = self.set_schedule_lr(optimizer=optimizer, end_lr=end_lr,
+                                            epochs=epochs, steps=step)
+        else:
+            self.lr_scheduler = None
+
+
+    def set_schedule_lr(self, optimizer, epochs, steps, end_lr=3/2):
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
+                                    max_lr=optimizer.param_groups[-1]['lr'],
+                                    epochs=epochs, steps_per_epoch=steps,
+                                    )
+        return scheduler
 
     def start_memory_reports(self):
         memory_report = "{}/memory_report".format(self.results_dir)
@@ -232,8 +248,9 @@ class Train_NeuralNet():
         else:
             return loss_lst, mcc_lst, prediction_lst, labels_lst, profiler       
 
-    def train(self, epochs, batch_size, lr_schedule=False, end_lr=3/2, mixed_precision=False,
-               num_workers=2, asynchronity=False):
+    def train(self, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
+            lr_schedule=False, end_lr=3/2, amsgrad=False, mixed_precision=False, num_workers=2, asynchronity=False,
+            fused_OptBack=False):
 
         log_dict = {"Epochs": dict()}
         pos_weight = self.train_dataset.get_weights()
@@ -246,11 +263,9 @@ class Train_NeuralNet():
         val_loader = self.load_data(self.val_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity)
 
-        if lr_schedule:
-            self.lr_scheduler = self.set_schedule_lr(end_lr=end_lr, epochs=epochs,
-                                                        steps=len(train_loader))
-        else:
-            self.lr_scheduler = None
+        steps = steps=len(train_loader)
+        self.set_optimizer(epochs=epochs, steps=steps, optimizer=optimizer, learning_rate=learning_rate, 
+                weight_decay=weight_decay, lr_schedule=lr_schedule, end_lr=end_lr, amsgrad=amsgrad, fused_OptBack=fused_OptBack)
 
         scaler = torch.cuda.amp.GradScaler(enabled=mixed_precision)
 

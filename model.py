@@ -143,14 +143,9 @@ class Compile_Model:
         dual_pred = self.is_dual()
         # Define Model
         train_instance = Train_NeuralNet(network=self.model,
-                            optimizer=self.config.train_parameters["optimizer"],
-                            learning_rate=self.config.train_parameters["learning_rate"],
-                            weight_decay=self.config.train_parameters["weight_decay"],
                             loss_function=self.config.train_parameters["loss_function"],
                             results_dir=self.config.train_parameters["results_dir"],
-                            memory_report=True,
-                            fused_OptBack=self.config.train_parameters["fused_OptBack"]
-                            )
+                            memory_report=True)
         # Create Train data
         train_instance.create_dataset(data_df=self.config.train_parameters["train_df"],
                             data_loc=self.config.train_parameters["train_loc"],
@@ -166,15 +161,19 @@ class Compile_Model:
                             cluster_sample=self.config.train_parameters["data_sample"],
                             cluster_tsv=self.config.train_parameters["cluster_tsv"],
                             dual_pred=dual_pred)
-
         # Train Model
         self.config.model_parameters["train_status"] = "Start"
         train_res = train_instance.train(epochs=self.config.train_parameters["epochs"],
                             batch_size=self.config.train_parameters["batch_size"],
+                            optimizer=self.config.train_parameters["optimizer"],
+                            learning_rate=self.config.train_parameters["learning_rate"], 
+                            weight_decay=self.config.train_parameters["weight_decay"],
                             lr_schedule=self.config.train_parameters["lr_scheduler"],
                             end_lr=self.config.train_parameters["lr_end"],
+                            amsgrad=False, num_workers=2,
                             mixed_precision=self.config.train_parameters["mix_prec"],
                             asynchronity=self.config.train_parameters["asynchronity"])
+
         if report == "dictionary":
             train_instance.savedict_train_results(train_res)      
 
