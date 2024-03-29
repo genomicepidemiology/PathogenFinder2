@@ -25,6 +25,26 @@ class ToTensor(object):
             dict_tensor[k] = t_v
         return dict_tensor
 
+class Normalize_Data:
+
+    def __init__(self, saved_data=None):
+        if saved_data is None:
+            self.mean_vec = None
+            self.std_vec = None
+        else:
+            path_saved = os.path.abspath(saved_data)
+            self.mean_vec, self.std_vec = self.load_vector(path=path_saved)
+
+    def load_vector(self, path):
+        array_vec = np.load(path)
+        return array_vec["mean"], array_vec["std"]
+
+    def __call__(self, sample):
+        embeddings = sample["Embeddings"]
+        norm_embeddings = (embeddings-self.mean_vec)/self.std_vec
+        sample["Embeddings"] = norm_embeddings
+        return sample
+            
 
 class ProteomeDataset(Dataset):
 

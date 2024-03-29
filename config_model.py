@@ -92,7 +92,7 @@ class ConfigModel:
                     "weight_decay", "lr_end", "fused_OptBack",
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
-                    "train_results", "memory_report", "results_dir", "compiler"])
+                    "train_results", "memory_report", "results_dir", "compiler", "normalize"])
         return train_parameters
 
     def standard_init_model(self):
@@ -152,6 +152,7 @@ class ConfigModel:
         self.train_parameters.set_param(param="train_results", value=args_train_res, type_d=str)
         self.train_parameters.set_param(param="memory_report", value=args.memory_report, type_d=str)
         self.train_parameters.set_param(param="compiler", value=args.memory_report, type_d=str)
+        self.train_parameters.set_param(param="normalize", value=args.normalize, type_d=str)
 
 
     def load_json_params(self, json_file):

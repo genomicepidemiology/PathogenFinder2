@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
 from tqdm import tqdm
-#from sklearn.metrics import matthews_corrcoef
 from torchmetrics.classification import BinaryMatthewsCorrCoef
 import h5py
 import pickle
@@ -13,10 +12,11 @@ import os
 import numpy as np
 import sys
 from datetime import datetime
+from torchvision import transforms
 
 sys.dont_write_bytecode = True
 
-from data_utils import ProteomeDataset, ToTensor
+from data_utils import ProteomeDataset, ToTensor, Normalize_Data
 
 
 class Train_NeuralNet():
@@ -24,7 +24,7 @@ class Train_NeuralNet():
 
     def __init__(self, network, optimizer=torch.optim.Adam, results_train="dictionary", learning_rate=1e-5,
                 weight_decay=1e-4, amsgrad=False, loss_function=None, results_dir=None,
-                memory_report=False, train_results="dictionary", compiler=None):
+                memory_report=False, train_results="dictionary", compiler=False):
 
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6' 
         torch.cuda.empty_cache()
@@ -37,8 +37,9 @@ class Train_NeuralNet():
 
 
         self.device = self.get_device()
+        print("Training on {}".format(self.device))
         network = network.to(self.device)
-        if compiler is None:
+        if not compiler:
             self.network = network
         else:
             self.network = torch.compile(network, mode=compiler, dynamic=True)
@@ -105,18 +106,25 @@ class Train_NeuralNet():
             return "cpu"
 
     def create_dataset(self, data_df, data_loc, data_type="train", dual_pred=False, cluster_sample=False,
-                        cluster_tsv=None, weighted=False):
+                        cluster_tsv=None, weighted=False, normalize=False):
+        print(normalize)
+        if normalize:
+            transform_data = transforms.Compose([Normalize_Data(normalize), ToTensor()])
+        else:
+            transform_data = transforms.Compose([ToTensor()])
+
         if data_type == "validation":
             dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                                        transform=ToTensor(), dual_pred=dual_pred)
+                                        transform=transform_data, dual_pred=dual_pred)
         else:
             if not cluster_sample:
                 dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                                        transform=ToTensor(), dual_pred=dual_pred, weighted=weighted)
+                                        transform=transform_data, dual_pred=dual_pred, weighted=weighted)
             else:
                 dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                            transform=ToTensor(), cluster_sampling=cluster_sample,
+                            transform=transform_data, cluster_sampling=cluster_sample,
                             cluster_tsv=cluster_tsv, dual_pred=dual_pred, weighted=weighted)
+
         if data_type == "train":
             self.train_dataset = dataset
         elif data_type == "validation":
