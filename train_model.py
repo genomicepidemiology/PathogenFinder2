@@ -198,8 +198,6 @@ class Train_NeuralNet():
             prediction_lst.extend(pred_c.tolist())
             labels_lst.extend(label_c.tolist())
             #  clean gpu (maybe unnecessary)
-            #torch.cuda.empty_cache()
-            #gc.collect()
         return loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler
 
     def val_pass(self, val_loader, last_epoch=False, profiler=None, asynchronity=False):
@@ -244,9 +242,7 @@ class Train_NeuralNet():
                     att_results["Proteins"].append(prot_names)
                     attentions = attentions.detach().cpu().numpy()
                     att_results["Attentions"].append(attentions)
-                #  clean gpu (maybe unnecessary)
-                #torch.cuda.empty_cache()
-                #gc.collect()
+                #  clean gpu (maybe unnecessary
         if last_epoch:
             return loss_lst, mcc_lst, prediction_lst, labels_lst, att_results, profiler
         else:
@@ -294,7 +290,7 @@ class Train_NeuralNet():
             loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler = self.train_pass(
                                                                     train_loader=train_loader,
                                                                     scaler=scaler,
-                                                                    mixed_precision=mixed_precision,)
+                                                                    mixed_precision=mixed_precision)
             log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst)
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Training"]["Labels"].extend(labels_lst)

@@ -42,7 +42,7 @@ class Normalize_Data:
     def __call__(self, sample):
         embeddings = sample["Embeddings"]
         norm_embeddings = (embeddings-self.mean_vec)/self.std_vec
-        sample["Embeddings"] = norm_embeddings
+        sample["Embeddings"] = norm_embeddings.astype(np.float32)
         return sample
             
 
