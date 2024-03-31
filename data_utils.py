@@ -55,7 +55,8 @@ class ProteomeDataset(Dataset):
                 "Pathogenic": np.array([1,0], dtype=int)}
 
     def __init__(self, csv_file, root_dir, cluster_sampling=False,
-                 dual_pred=False, cluster_tsv=None, transform=None, weighted=False):
+                 dual_pred=False, cluster_tsv=None, transform=None, weighted=False,
+                 fraction_embeddings=False):
         """
         Arguments
             csv_file (string): Path to the csv file with annotations.
@@ -89,6 +90,8 @@ class ProteomeDataset(Dataset):
             weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame,
                                 patho_pred=self.dict_patho)
             self.weights = torch.Tensor(weights)
+        
+        self.fraction_embeddings = fraction_embeddings
 
     def get_weights(self):
         return self.weights
@@ -121,6 +124,14 @@ class ProteomeDataset(Dataset):
         embedding_name = os.path.join(self.root_dir,
                                 self.landmarks_frame.iloc[idx_repr]["File_Embedding"])
         embedings, length_proteome, protein_names = ProteomeDataset.open_embedfile(embedding_name)
+        if not self.fraction_embeddings:
+            embedings = embedings
+        elif self.fraction_embeddings == 1:
+            embedings = embedings[0:342]
+        elif self.fraction_embeddings == 2:
+            embedings = embedings[341:683]
+        elif self.fraction_embeddings == 3:
+            embedings = embedings[683:1024]
         file_name = self.landmarks_frame.iloc[idx_repr]["File_Embedding"]
         pathophenotype = self.landmarks_frame.iloc[idx_repr]["PathoPhenotype"]
 
