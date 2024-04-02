@@ -106,24 +106,25 @@ class Train_NeuralNet():
             return "cpu"
 
     def create_dataset(self, data_df, data_loc, data_type="train", dual_pred=False, cluster_sample=False,
-                        cluster_tsv=None, weighted=False, normalize=False):
-        print(normalize)
+                        cluster_tsv=None, weighted=False, normalize=False, fraction_embeddings=False):
         if normalize:
             transform_data = transforms.Compose([Normalize_Data(normalize), ToTensor()])
         else:
             transform_data = transforms.Compose([ToTensor()])
 
         if data_type == "validation":
-            dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                                        transform=transform_data, dual_pred=dual_pred)
+            dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc, transform=transform_data,
+                                    dual_pred=dual_pred, fraction_embeddings=fraction_embeddings)
         else:
             if not cluster_sample:
                 dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                                        transform=transform_data, dual_pred=dual_pred, weighted=weighted)
+                                        transform=transform_data, dual_pred=dual_pred, weighted=weighted,
+                                        fraction_embeddings=fraction_embeddings)
             else:
                 dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
                             transform=transform_data, cluster_sampling=cluster_sample,
-                            cluster_tsv=cluster_tsv, dual_pred=dual_pred, weighted=weighted)
+                            cluster_tsv=cluster_tsv, dual_pred=dual_pred, weighted=weighted,
+                            fraction_embeddings=fraction_embeddings)
 
         if data_type == "train":
             self.train_dataset = dataset
@@ -153,7 +154,7 @@ class Train_NeuralNet():
         optimizer_dict[parameter].step()
         optimizer_dict[parameter].zero_grad()
     
-    def train_pass(self, train_loader, scaler, mixed_precision=False, profiler=None, asynchronity=False):
+    def train_pass(self, train_loader, scaler, mixed_precision=False, profiler=None, asynchronity=False, clipping=False):
         mcc_calc = BinaryMatthewsCorrCoef()
         loss_lst = []
         mcc_lst = []
@@ -179,6 +180,12 @@ class Train_NeuralNet():
                                         predictions_logit=predictions_logit, labels=labels)
             #  computing gradients
             scaler.scale(loss).backward()
+            if clipping:
+                # Unscales the gradients of optimizer's assigned params in-place
+                scaler.unscale_(self.optimizer)
+
+                # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(), clipping)
             #  updating weights
             if isinstance(self.optimizer, dict):
                 pass
@@ -198,6 +205,7 @@ class Train_NeuralNet():
             prediction_lst.extend(pred_c.tolist())
             labels_lst.extend(label_c.tolist())
             #  clean gpu (maybe unnecessary)
+            print("Train Loss step: {} // Train MCC step: {}".format(loss_c, mcc_c))
         return loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler
 
     def val_pass(self, val_loader, last_epoch=False, profiler=None, asynchronity=False):
@@ -213,7 +221,6 @@ class Train_NeuralNet():
         with torch.inference_mode():
             for batch in tqdm(val_loader):
                 if self.profiler is not None:
-                    print("MEH")
                     self.profiler.step()
                 embeddings = batch["Embeddings"]
                 labels = batch["Pathogen_Label"]
@@ -243,6 +250,7 @@ class Train_NeuralNet():
                     attentions = attentions.detach().cpu().numpy()
                     att_results["Attentions"].append(attentions)
                 #  clean gpu (maybe unnecessary
+                print("Val Loss step: {} // Val MCC step: {}".format(loss_c, mcc_c))
         if last_epoch:
             return loss_lst, mcc_lst, prediction_lst, labels_lst, att_results, profiler
         else:
@@ -250,7 +258,7 @@ class Train_NeuralNet():
 
     def train(self, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
             lr_schedule=False, end_lr=3/2, amsgrad=False, mixed_precision=False, num_workers=2, asynchronity=False,
-            fused_OptBack=False):
+            fused_OptBack=False, clipping=False):
 
         log_dict = {"Epochs": dict()}
         pos_weight = self.train_dataset.get_weights()
@@ -287,11 +295,12 @@ class Train_NeuralNet():
                 log_dict["Epochs"][epoch]["Validation"]["Attentions"] = list()
 
             #  training
-            loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler = self.train_pass(
+            loss_lst_train, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler = self.train_pass(
                                                                     train_loader=train_loader,
                                                                     scaler=scaler,
-                                                                    mixed_precision=mixed_precision)
-            log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst)
+                                                                    mixed_precision=mixed_precision,
+                                                                    clipping=clipping)
+            log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst_train)
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Training"]["Labels"].extend(labels_lst)
             log_dict["Epochs"][epoch]["Learning rate"].extend(lr_rate_lst)
@@ -299,19 +308,22 @@ class Train_NeuralNet():
             #  validation
             print('validating...')
             if epoch >= epochs-1:
-                loss_lst, mcc_lst, prediction_lst, labels_lst, att_results, profiler = self.val_pass(
+                loss_lst_val, mcc_lst, prediction_lst, labels_lst, att_results, profiler = self.val_pass(
                                                                 val_loader=val_loader, last_epoch=True)
                 log_dict["Epochs"][epoch]["Validation"]["Protein Names"].extend(att_results["Proteins"])                
                 log_dict["Epochs"][epoch]["Validation"]["Genome Names"].extend(att_results["Genomes"])                
                 log_dict["Epochs"][epoch]["Validation"]["Attentions"].extend(att_results["Attentions"])                
             else:
-                loss_lst, mcc_lst, prediction_lst, labels_lst, profilerr = self.val_pass(
+                loss_lst_val, mcc_lst, prediction_lst, labels_lst, profilerr = self.val_pass(
                                                                     val_loader=val_loader)
-            log_dict["Epochs"][epoch]["Validation"]["Loss"].extend(loss_lst)
+            log_dict["Epochs"][epoch]["Validation"]["Loss"].extend(loss_lst_val)
             log_dict["Epochs"][epoch]["Validation"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Validation"]["Labels"].extend(labels_lst)
+            #print("training_loss: {}, validation_loss: {}, valClust_loss".format(
+             #   round(np.mean(log_dict["Epochs"][epoch]["Training"]['Loss']), 4), round(np.mean(log_dict["Epochs"][epoch]["Validation"]["Loss"]), 4))
+            #)
             print("training_loss: {}, validation_loss: {}, valClust_loss".format(
-                round(np.mean(log_dict["Epochs"][epoch]["Training"]['Loss']), 4), round(np.mean(log_dict["Epochs"][epoch]["Validation"]["Loss"]), 4))
+                round(np.mean(loss_lst_train), 4), round(np.mean(loss_lst_val), 4))
             )
         if self.profiler is not None:
             self.stop_memory_reports()

@@ -178,6 +178,7 @@ class Compile_Model:
                             amsgrad=False, num_workers=2,
                             mixed_precision=self.config.train_parameters["mix_prec"],
                             asynchronity=self.config.train_parameters["asynchronity"],
+                            clipping=self.config.train_parameters["clipping"]
 			    )
 
         if report == "dictionary":

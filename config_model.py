@@ -89,7 +89,7 @@ class ConfigModel:
         train_parameters.init_params(
                 list_params=["batch_size", "optimizer", "learning_rate",
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
-                    "weight_decay", "lr_end", "fused_OptBack",
+                    "weight_decay", "lr_end", "fused_OptBack", "clipping",
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
                     "train_results", "memory_report", "results_dir", "compiler", "normalize"])
