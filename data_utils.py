@@ -124,17 +124,18 @@ class ProteomeDataset(Dataset):
         embedding_name = os.path.join(self.root_dir,
                                 self.landmarks_frame.iloc[idx_repr]["File_Embedding"])
         embedings, length_proteome, protein_names = ProteomeDataset.open_embedfile(embedding_name)
+        
         if not self.fraction_embeddings:
             embedings = embedings
         elif self.fraction_embeddings == 1:
-            embedings = embedings[0:342]
+            embedings = embedings[:,0:347]
         elif self.fraction_embeddings == 2:
-            embedings = embedings[341:683]
+            embedings = embedings[:,337:687]
         elif self.fraction_embeddings == 3:
-            embedings = embedings[683:1024]
+            embedings = embedings[:,677:]
         file_name = self.landmarks_frame.iloc[idx_repr]["File_Embedding"]
         pathophenotype = self.landmarks_frame.iloc[idx_repr]["PathoPhenotype"]
-
+        
         try:
             patho_int = np.array([self.dict_patho[pathophenotype]], dtype=np.float32)
         except KeyError:
