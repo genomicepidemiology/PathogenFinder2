@@ -89,9 +89,11 @@ class ConfigModel:
         train_parameters.init_params(
                 list_params=["batch_size", "optimizer", "learning_rate",
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
-                    "weight_decay", "lr_end", "mix_prec", "data_sample", "cluster_tsv", "prot_dim_split",
+                    "weight_decay", "lr_end", "fused_OptBack", "clipping", "bucketing",
+                    "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
-                    "train_results", "memory_report", "results_dir"])
+                    "train_results", "memory_report", "results_dir", "compiler", "normalize",
+                    "bucketing"])
         return train_parameters
 
     def standard_init_model(self):
@@ -130,6 +132,7 @@ class ConfigModel:
     
     def load_train_params(self, args):
         self.train_parameters.set_param(param="batch_size", value=args.batch_size, type_d=int)
+        self.train_parameters.set_param(param="optimizer", value=args.optimizer, type_d=str)
         self.train_parameters.set_param(param="learning_rate", value=args.learning_rate, type_d=float)
         self.train_parameters.set_param(param="epochs", value=args.epochs, type_d=int)
         self.train_parameters.set_param(param="lr_scheduler", value=args.lr_scheduler)
@@ -138,6 +141,8 @@ class ConfigModel:
         self.train_parameters.set_param(param="imbalance_sample", value=args.imbalance_sample, type_d=float)
         self.train_parameters.set_param(param="lr_end", value=args.lr_end, type_d=float)
         self.train_parameters.set_param(param="mix_prec", value=args.precision, type_d=bool)
+        self.train_parameters.set_param(param="fused_OptBack", value=args.fused_optback, type_d=bool)
+        self.train_parameters.set_param(param="asynchronity", value=args.asynchronity, type_d=bool)
         self.train_parameters.set_param(param="data_sample", value=args.data_sample, type_d=bool)
         self.train_parameters.set_param(param="cluster_tsv", value=args.cluster_tsv, type_d=str)
         self.train_parameters.set_param(param="prot_dim_split", value=args.prot_dim_split, type_d=int)
@@ -147,6 +152,10 @@ class ConfigModel:
         self.train_parameters.set_param(param="val_loc", value=args.val_loc, type_d=str)
         self.train_parameters.set_param(param="train_results", value=args_train_res, type_d=str)
         self.train_parameters.set_param(param="memory_report", value=args.memory_report, type_d=str)
+        self.train_parameters.set_param(param="compiler", value=args.memory_report, type_d=str)
+        self.train_parameters.set_param(param="normalize", value=args.normalize, type_d=str)
+        self.train_parameters.set_param(param="bucketing", value=args.bucketing_sample, type_d=int)
+
 
     def load_json_params(self, json_file):
         with open(json_file, "r") as f:
@@ -217,6 +226,7 @@ class ConfigModel:
         parser_train.add_argument("-m_p", "--mixed_precision", help="mixed_precision", action="store_true")
         parser_train.add_argument("-d_s", "--data_sample", help="sample data", action="store_true")
         parser_train.add_argument("-p", "--prot_dim_split", help="sample data", action="store_true")
+        parser_train.add_argument("-b_s", "--bucketing_sample", help="bucketing length", type=int, default=None)
         parser_train.add_argument("-tr_d", "--train_df", help="train_df")
         parser_train.add_argument("-tr_l", "--train_loc", help="train_loc")
         parser_train.add_argument("-val_d", "--val_df", help="val_df")
