@@ -196,11 +196,12 @@ class ProteomeDataset(Dataset):
 
 class BucketSampler(Sampler):
     
-    def __init__(self, landmarks_frame, batch_size, num_buckets=10, random_buckets=True):
+    def __init__(self, landmarks_frame, batch_size, num_buckets=10, random_buckets=True,
+                    column_name="Proteome_length"):
         assert batch_size > num_buckets
         assert len(landmarks_frame) > batch_size*num_buckets
-        sort_df = landmarks_frame.sort_values(by=['Proteome_length'])
-        lens_ind = np.array([sort_df.index.values, sort_df["Proteome_length"].values], dtype=np.int32).T
+        sort_df = landmarks_frame.sort_values(by=[column_name])
+        lens_ind = np.array([sort_df.index.values, sort_df[column_name].values], dtype=np.int32).T
         len_df = len(sort_df)
         batch_buck = math.ceil((len_df/batch_size)/num_buckets)
         bucket_ind_l = []
