@@ -60,16 +60,25 @@ class Train_NeuralNet():
                                             amsgrad=amsgrad)
         if lr_schedule:
             self.lr_scheduler = self.set_schedule_lr(optimizer=self.optimizer, end_lr=end_lr,
+                                            scheduler_type=lr_schedule,
                                             epochs=epochs, steps=steps, max_lr=learning_rate)
         else:
             self.lr_scheduler = None
 
 
-    def set_schedule_lr(self, optimizer, epochs, steps, max_lr, end_lr=3/2):
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
-                                    max_lr=max_lr,
+    def set_schedule_lr(self, scheduler_type, optimizer, epochs, steps, max_lr, end_lr=3/2):
+        if scheduler_type == "OneCycle":
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
+                                    max_lr=max_lr, final_div_factor=end_lr,
                                     epochs=epochs, steps_per_epoch=steps,
                                     )
+        elif scheduler_type == "Plateau":
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
+                                    max_lr=max_lr, final_div_factor=end_lr,
+                                    epochs=epochs, steps_per_epoch=steps,
+                                    )
+        else:
+            raise ValueError("The scheduler type {} is not available".format(type_scheduler))
         return scheduler
 
     def start_memory_reports(self):
