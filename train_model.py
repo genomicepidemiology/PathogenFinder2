@@ -67,18 +67,15 @@ class Train_NeuralNet():
 
 
     def set_schedule_lr(self, scheduler_type, optimizer, epochs, steps, max_lr, end_lr=3/2):
-        if scheduler_type == "OneCycle":
+        if scheduler_type == "OneCycleLR":
             scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
                                     max_lr=max_lr, final_div_factor=end_lr,
                                     epochs=epochs, steps_per_epoch=steps,
                                     )
-        elif scheduler_type == "Plateau":
-            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
-                                    max_lr=max_lr, final_div_factor=end_lr,
-                                    epochs=epochs, steps_per_epoch=steps,
-                                    )
+        elif scheduler_type == "ReduceLROnPlateau":
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min")
         else:
-            raise ValueError("The scheduler type {} is not available".format(type_scheduler))
+            raise ValueError("The scheduler type {} is not available".format(scheduler_type))
         return scheduler
 
     def start_memory_reports(self):
@@ -188,6 +185,7 @@ class Train_NeuralNet():
         prediction_lst = []
         labels_lst = []
         lr_rate_lst = []
+        genome_names = []
         for batch in tqdm(train_loader):
             if self.profiler is not None:
                 self.profiler.step()
@@ -220,13 +218,14 @@ class Train_NeuralNet():
             else:
                 scaler.step(self.optimizer)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
-            scaler.update()          
+            scaler.update()
+            if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
+                self.lr_scheduler.step()          
             #  computing loss
             loss_c = loss.detach().cpu().tolist()
             pred_c = predictions.detach().cpu()
             label_c = labels.detach().cpu()
+            genome_names.append(batch["File_Names"])
             mcc_c = mcc_calc(pred_c, label_c)
             loss_lst.append(loss_c)
             mcc_lst.append(mcc_c)
@@ -234,7 +233,7 @@ class Train_NeuralNet():
             labels_lst.extend(label_c.tolist())
             #  clean gpu (maybe unnecessary)
             print("Train Loss step: {} // Train MCC step: {}".format(loss_c, mcc_c))
-        return loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler
+        return loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler, genome_names
 
     def val_pass(self, val_loader, last_epoch=False, profiler=None, asynchronity=False):
         mcc_calc = BinaryMatthewsCorrCoef()
@@ -321,13 +320,16 @@ class Train_NeuralNet():
                 log_dict["Epochs"][epoch]["Validation"]["Protein Names"] = list()
                 log_dict["Epochs"][epoch]["Validation"]["Genome Names"] = list()
                 log_dict["Epochs"][epoch]["Validation"]["Attentions"] = list()
+                log_dict["Epochs"][epoch]["Training"]["Genome Names"] = list()
 
             #  training
-            loss_lst_train, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler = self.train_pass(
+            loss_lst_train, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler, genome_names = self.train_pass(
                                                                     train_loader=train_loader,
                                                                     scaler=scaler,
                                                                     mixed_precision=mixed_precision,
                                                                     clipping=clipping)
+            if epoch >= epochs-1:
+                log_dict["Epochs"][epoch]["Training"]["Genome Names"].extend(genome_names)
             log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst_train)
             log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Training"]["Labels"].extend(labels_lst)
@@ -347,6 +349,8 @@ class Train_NeuralNet():
             log_dict["Epochs"][epoch]["Validation"]["Loss"].extend(loss_lst_val)
             log_dict["Epochs"][epoch]["Validation"]["Prediction"].extend(prediction_lst)
             log_dict["Epochs"][epoch]["Validation"]["Labels"].extend(labels_lst)
+            if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
+                self.lr_scheduler.step(np.nanmean(loss_lst_val))
             #print("training_loss: {}, validation_loss: {}, valClust_loss".format(
              #   round(np.mean(log_dict["Epochs"][epoch]["Training"]['Loss']), 4), round(np.mean(log_dict["Epochs"][epoch]["Validation"]["Loss"]), 4))
             #)
