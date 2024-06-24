@@ -367,7 +367,7 @@ class Train_NeuralNet():
                                 'loss': loss_train, "val_measure": mcc_v}
 
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
-                self.update_scheduler(value=np.nanmean(loss_lst_val))
+                self.update_scheduler(value=loss_val)
             print("training_loss: {}, validation_loss: {}, valClust_loss".format(
                 round(np.mean(loss_train), 4), round(np.mean(loss_val), 4))
             )
