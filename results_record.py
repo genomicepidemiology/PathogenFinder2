@@ -86,5 +86,3 @@ class Json_Results:
                         "Error data": self.error_data}
         with open("{}/train_results.pkl".format(results_dir), 'wb') as f:
             pickle.dump(results_dict, f)
-        np.savez("{}/train_results.npz".format(results_dir), epochs_training=self.epochs_training,
-			last_model_data=self.last_model_data, error_data=self.error_data)
