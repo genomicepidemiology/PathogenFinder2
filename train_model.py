@@ -3,8 +3,8 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
+import pytorch_warmup as warmup
 from tqdm import tqdm
-from torchmetrics.classification import BinaryMatthewsCorrCoef
 import h5py
 import pickle
 import gc
@@ -13,18 +13,19 @@ import numpy as np
 import sys
 from datetime import datetime
 from torchvision import transforms
+from torch.optim import swa_utils
 
 sys.dont_write_bytecode = True
 
 from data_utils import ProteomeDataset, ToTensor, Normalize_Data, BucketSampler, FractionEmbeddings, PhenotypeInteger
+from results_record import Json_Results
 
 
 class Train_NeuralNet():
     MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
 
-    def __init__(self, network, optimizer=torch.optim.Adam, results_train="dictionary", learning_rate=1e-5,
-                weight_decay=1e-4, amsgrad=False, loss_function=None, results_dir=None,
-                memory_report=False, train_results="dictionary", compiler=False):
+    def __init__(self, network, configuration=None, loss_function=None, results_dir=None, memory_report=False, 
+		compiler=False, wandb_results=True, mixed_precision=False):
 
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6' 
         torch.cuda.empty_cache()
@@ -47,8 +48,17 @@ class Train_NeuralNet():
         self.train_dataset = None
         self.val_dataset = None
 
+        self.mixed_precision = mixed_precision
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
+
+
+        self.results_training = Json_Results(wandb_results=wandb_results, configuration=configuration,
+						name=os.path.basename(self.results_dir), model=self.network, criterion=self.loss)
+        self.saved_model = {"epoch": None, 'model_state_dict': None, 'optimizer_state_dict': None,
+				'loss': None, "val_measure": None}
+
     def set_optimizer(self, epochs, steps, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
-                        lr_schedule=False, end_lr=3/2, amsgrad=False, fused_OptBack=False):
+                        lr_schedule=False, end_lr=3/2, amsgrad=False, fused_OptBack=False, warmup_period=False):
         if fused_OptBack:
             self.optimizer = {p: optimizer([p], foreach=False, lr=learning_rate, weight_decay=weight_decay, amsgrad=amsgrad
                                             ) for p in self.network.parameters()}
@@ -64,6 +74,10 @@ class Train_NeuralNet():
                                             epochs=epochs, steps=steps, max_lr=learning_rate)
         else:
             self.lr_scheduler = None
+        if warmup_period:
+            self.warmup = {"scheduler": warmup.LinearWarmup(self.optimizer, warmup_period), "period": warmup_period}
+        else:
+            self.warmup = None
 
 
     def set_schedule_lr(self, scheduler_type, optimizer, epochs, steps, max_lr, end_lr=3/2):
@@ -73,7 +87,7 @@ class Train_NeuralNet():
                                     epochs=epochs, steps_per_epoch=steps,
                                     )
         elif scheduler_type == "ReduceLROnPlateau":
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min")
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, min_lr=1e-6)
         else:
             raise ValueError("The scheduler type {} is not available".format(scheduler_type))
         return scheduler
@@ -173,24 +187,36 @@ class Train_NeuralNet():
             raise KeyError("The loss function {} is not available".format(self.loss))
         return predictions, loss
 
+    def scheduler_step(self, value=False):
+        if value:
+            self.lr_scheduler.step(value)
+        else:
+            self.lr_scheduler.step()
+
+    def update_scheduler(self, value=False):
+        if self.warmup is not None:
+            with self.warmup["scheduler"].dampening():
+                if self.warmup["scheduler"].last_step + 1 >= self.warmup["period"]:
+                    self.scheduler_step(value=value)
+        else:
+            self.scheduler_step(value=value)
+
     @staticmethod
     def optimizer_hook(parameter):
         optimizer_dict[parameter].step()
         optimizer_dict[parameter].zero_grad()
     
-    def train_pass(self, train_loader, scaler, mixed_precision=False, profiler=None, asynchronity=False, clipping=False):
-        mcc_calc = BinaryMatthewsCorrCoef()
+    def train_pass(self, train_loader, profiler=None, asynchronity=False, clipping=False):
+
         loss_lst = []
-        mcc_lst = []
         prediction_lst = []
         labels_lst = []
         lr_rate_lst = []
-        genome_names = []
+
         for batch in tqdm(train_loader):
             if self.profiler is not None:
                 self.profiler.step()
             embeddings = batch["Embeddings"]
-            print(embeddings.shape)
             labels = batch["PathoPhenotype"]
             lengths = batch["Proteome_Length"]
             #  sending data to device
@@ -200,51 +226,47 @@ class Train_NeuralNet():
             #  resetting gradients
             self.optimizer.zero_grad(set_to_none=True)
             #  making predictions
-            with torch.autocast(device_type=self.device, enabled=mixed_precision):
+            with torch.autocast(device_type=self.device, enabled=self.mixed_precision):
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(
                                         predictions_logit=predictions_logit, labels=labels)
             #  computing gradients
-            scaler.scale(loss).backward()
+            self.scaler.scale(loss).backward()
             if clipping:
                 # Unscales the gradients of optimizer's assigned params in-place
-                scaler.unscale_(self.optimizer)
-
+                self.scaler.unscale_(self.optimizer)
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), clipping)
             #  updating weights
             if isinstance(self.optimizer, dict):
                 pass
             else:
-                scaler.step(self.optimizer)
+                self.scaler.step(self.optimizer)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
-            scaler.update()
+            self.scaler.update()
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
-                self.lr_scheduler.step()          
+                self.update_scheduler()          
             #  computing loss
             loss_c = loss.detach().cpu().tolist()
-            pred_c = predictions.detach().cpu()
-            label_c = labels.detach().cpu()
-            genome_names.append(batch["File_Names"])
-            mcc_c = mcc_calc(pred_c, label_c)
+            pred_c = predictions.detach().cpu().numpy()
+            label_c = labels.detach().cpu().numpy()
             loss_lst.append(loss_c)
-            mcc_lst.append(mcc_c)
-            prediction_lst.extend(pred_c.tolist())
-            labels_lst.extend(label_c.tolist())
+            prediction_lst.append(pred_c)
+            labels_lst.append(label_c)
             #  clean gpu (maybe unnecessary)
-            print("Train Loss step: {} // Train MCC step: {}".format(loss_c, mcc_c))
-        return loss_lst, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler, genome_names
+        return np.array(loss_lst), np.concatenate(prediction_lst, axis=0), np.concatenate(labels_lst, axis=0), np.array(lr_rate_lst), profiler
 
     def val_pass(self, val_loader, last_epoch=False, profiler=None, asynchronity=False):
-        mcc_calc = BinaryMatthewsCorrCoef()
+
         loss_lst = []
-        mcc_lst = []
         prediction_lst = []
         labels_lst = []
+
         if last_epoch:
             att_results = {"Genomes": [], "Proteins":[], "Attentions": []}
         else:
             att_results = None
+
         with torch.inference_mode():
             for batch in tqdm(val_loader):
                 if self.profiler is not None:
@@ -259,35 +281,44 @@ class Train_NeuralNet():
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(
-                                        predictions_logit=predictions_logit, labels=labels)
+                                       	 predictions_logit=predictions_logit, labels=labels)
                 #  computing loss
-                loss_c = loss.detach().cpu().tolist()
-                pred_c = predictions.detach().cpu()
-                label_c = labels.detach().cpu()
-                mcc_c = mcc_calc(pred_c, label_c)
+                loss_c = loss.detach().cpu()
+                pred_c = predictions.detach().cpu().numpy()
+                label_c = labels.detach().cpu().numpy()
                 loss_lst.append(loss_c)
-                mcc_lst.append(mcc_c)
-                prediction_lst.extend(pred_c.tolist())
-                labels_lst.extend(label_c.tolist())
+                prediction_lst.append(pred_c)
+                labels_lst.append(label_c)
+
                 if last_epoch:
                     genome_names = batch["File_Names"]
                     att_results["Genomes"].extend(genome_names)
                     prot_names = batch["Protein_IDs"]
-                    att_results["Proteins"].append(prot_names)
+                    att_results["Proteins"].extend(prot_names)
                     attentions = attentions.detach().cpu().numpy()
                     att_results["Attentions"].append(attentions)
                 #  clean gpu (maybe unnecessary
-                print("Val Loss step: {} // Val MCC step: {}".format(loss_c, mcc_c))
         if last_epoch:
-            return loss_lst, mcc_lst, prediction_lst, labels_lst, att_results, profiler
+            return np.array(loss_lst), np.concatenate(prediction_lst, axis=0), np.concatenate(labels_lst, axis=0), att_results, profiler
         else:
-            return loss_lst, mcc_lst, prediction_lst, labels_lst, profiler       
+            return np.array(loss_lst), np.concatenate(prediction_lst, axis=0), np.concatenate(labels_lst, axis=0), profiler
+
+    def best_epoch_retain(self, new_val, optimizer, model, epoch, loss):
+        if self.saved_model["val_measure"] is not None and self.saved_model["val_measure"] > new_val:
+            return {"epoch": epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
+                                'loss': loss, "val_measure": new_val}
+        else:
+            return self.saved_model
+
+    def early_stopping(self):
+        pass
+        
 
     def train(self, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
-            lr_schedule=False, end_lr=3/2, amsgrad=False, mixed_precision=False, num_workers=2, asynchronity=False,
-            fused_OptBack=False, clipping=False, bucketing=False):
+            lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False,
+            fused_OptBack=False, clipping=False, bucketing=False, warmup_period=False, stop_method="best_epoch"):
 
-        log_dict = {"Epochs": dict()}
+
         pos_weight = self.train_dataset.get_weights()
 
         self.loss_function = self.loss()
@@ -300,70 +331,78 @@ class Train_NeuralNet():
 
         steps = steps=len(train_loader)
         self.set_optimizer(epochs=epochs, steps=steps, optimizer=optimizer, learning_rate=learning_rate, 
-                weight_decay=weight_decay, lr_schedule=lr_schedule, end_lr=end_lr, amsgrad=amsgrad, fused_OptBack=fused_OptBack)
-
-        scaler = torch.cuda.amp.GradScaler(enabled=mixed_precision)
-
+                weight_decay=weight_decay, lr_schedule=lr_schedule, end_lr=end_lr, amsgrad=amsgrad, fused_OptBack=fused_OptBack,
+                warmup_period=warmup_period)
 
         for epoch in range(epochs):
             print(f'Epoch {epoch+1}/{epochs}') 
-            log_dict["Epochs"][epoch] = {"Training": dict(), "Validation": dict()}
-            log_dict["Epochs"][epoch]["Training"]["Loss"] = list()
-            log_dict["Epochs"][epoch]["Training"]["Prediction"] = list()
-            log_dict["Epochs"][epoch]["Training"]["Labels"] = list()
-            log_dict["Epochs"][epoch]["Validation"]["Loss"] = list()
-            log_dict["Epochs"][epoch]["Validation"]["Prediction"] = list()
-            log_dict["Epochs"][epoch]["Validation"]["Labels"] = list()
-            log_dict["Epochs"][epoch]["Learning rate"] = list()
-
-            if epoch >= epochs-1:
-                log_dict["Epochs"][epoch]["Validation"]["Protein Names"] = list()
-                log_dict["Epochs"][epoch]["Validation"]["Genome Names"] = list()
-                log_dict["Epochs"][epoch]["Validation"]["Attentions"] = list()
-                log_dict["Epochs"][epoch]["Training"]["Genome Names"] = list()
-
             #  training
-            loss_lst_train, mcc_lst, prediction_lst, labels_lst, lr_rate_lst, profiler, genome_names = self.train_pass(
+            loss_train, prediction_train, labels_train, lr_rate, profiler = self.train_pass(
                                                                     train_loader=train_loader,
-                                                                    scaler=scaler,
-                                                                    mixed_precision=mixed_precision,
                                                                     clipping=clipping)
-            if epoch >= epochs-1:
-                log_dict["Epochs"][epoch]["Training"]["Genome Names"].extend(genome_names)
-            log_dict["Epochs"][epoch]["Training"]["Loss"].extend(loss_lst_train)
-            log_dict["Epochs"][epoch]["Training"]["Prediction"].extend(prediction_lst)
-            log_dict["Epochs"][epoch]["Training"]["Labels"].extend(labels_lst)
-            log_dict["Epochs"][epoch]["Learning rate"].extend(lr_rate_lst)
 
             #  validation
             print('validating...')
             if epoch >= epochs-1:
-                loss_lst_val, mcc_lst, prediction_lst, labels_lst, att_results, profiler = self.val_pass(
-                                                                val_loader=val_loader, last_epoch=True)
-                log_dict["Epochs"][epoch]["Validation"]["Protein Names"].extend(att_results["Proteins"])                
-                log_dict["Epochs"][epoch]["Validation"]["Genome Names"].extend(att_results["Genomes"])                
-                log_dict["Epochs"][epoch]["Validation"]["Attentions"].extend(att_results["Attentions"])                
+                loss_val, prediction_val, labels_val, att_results, profiler = self.val_pass(
+		                                                                val_loader=val_loader, last_epoch=True)
+                self.results_training.add_lastmodel_data(prot_names=att_results["Proteins"], genome_names=att_results["Genomes"],
+								attentions=att_results["Attentions"])
             else:
-                loss_lst_val, mcc_lst, prediction_lst, labels_lst, profilerr = self.val_pass(
+                loss_val, prediction_val, labels_val, profilerr = self.val_pass(
                                                                     val_loader=val_loader)
-            log_dict["Epochs"][epoch]["Validation"]["Loss"].extend(loss_lst_val)
-            log_dict["Epochs"][epoch]["Validation"]["Prediction"].extend(prediction_lst)
-            log_dict["Epochs"][epoch]["Validation"]["Labels"].extend(labels_lst)
+            mcc_t, acc_t = Json_Results.calculate_metrics(labels=labels_train, predictions=prediction_train)
+            mcc_v, acc_v = Json_Results.calculate_metrics(labels=labels_val, predictions=prediction_val)
+
+            self.results_training.add_epoch_report(epoch=epoch, loss_t=loss_train, labels_t=labels_train,
+                                        predictions_t=prediction_train, loss_v=loss_val, labels_v=labels_val,
+					predictions_v=prediction_val, lr=lr_rate, mcc_t=mcc_t, acc_t=acc_t,
+                                        mcc_v=mcc_v, acc_v=acc_v)
+            if stop_method == "early_stopping":
+                pass
+            elif stop_method == "best_epoch":
+                self.saved_model = self.best_epoch_retain(new_val=mcc_v, optimizer=self.optimizer, model=self.network, epoch=epoch, loss=loss_train)
+            else:
+                self.saved_model = {"epoch": epoch, 'model_state_dict': self.network.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict(),
+                                'loss': loss_train, "val_measure": mcc_v}
+
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
-                self.lr_scheduler.step(np.nanmean(loss_lst_val))
-            #print("training_loss: {}, validation_loss: {}, valClust_loss".format(
-             #   round(np.mean(log_dict["Epochs"][epoch]["Training"]['Loss']), 4), round(np.mean(log_dict["Epochs"][epoch]["Validation"]["Loss"]), 4))
-            #)
+                self.update_scheduler(value=np.nanmean(loss_lst_val))
             print("training_loss: {}, validation_loss: {}, valClust_loss".format(
-                round(np.mean(loss_lst_train), 4), round(np.mean(loss_lst_val), 4))
+                round(np.mean(loss_train), 4), round(np.mean(loss_val), 4))
             )
         if self.profiler is not None:
             self.stop_memory_reports()
-        return log_dict
+        return self.saved_model
 
-    def savedict_train_results(self, train_res):
-        with open("{}/train_results.pkl".format(self.results_dir), 'wb') as f:
-            pickle.dump(train_res, f)
+    def swa_pass(self, state_dict_model, optimizer, swa_iter, train_loader):
+        self.network = self.network.load_state_dict(state_dict)
+        swa_model = swa_utils.AveragedModel(self.network)
+        swa_scheduler = swa_utils.SWALR(optimizer, swa_lr=0.05)
+        for swa_epoch in range(swa_iter):
+            loss_train, prediction_train, labels_train, lr_rate, profiler = self.train_pass(train_loader=train_loader,
+										              clipping=False)
+            swa_model.update_parameters(model)
+            swa_scheduler.step()
+
+        swa_utils.update_bn(train_loader, swa_model)
+        return swa_model
+        
+
+    def savedict_train_results(self):
+        self.results_training.save_results(self.results_dir)
+    
+    def save_model(self, model, type_save="state_dict"):
+        path = "{}/model.pth".format(self.results_dir)
+        if type_save == "state_dict":
+            torch.save(self.saved_model["model_state_dict"], path)
+        elif type_save == "checkpoint":
+            torch.save(self.saved_model, path)
+        else:
+            torch.save(self.network, path)
+
+    def load_model(self, state_dict):
+        return self.network.load_state_dict(state_dict)
 
     def get_network(self):
         return self.network.cpu()

@@ -93,7 +93,7 @@ class ConfigModel:
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
                     "train_results", "memory_report", "results_dir", "compiler", "normalize",
-                    "bucketing"])
+                    "bucketing", "warm_up", "swa", "ema", "wandb_report"])
         return train_parameters
 
     def standard_init_model(self):
@@ -155,6 +155,10 @@ class ConfigModel:
         self.train_parameters.set_param(param="compiler", value=args.memory_report, type_d=str)
         self.train_parameters.set_param(param="normalize", value=args.normalize, type_d=str)
         self.train_parameters.set_param(param="bucketing", value=args.bucketing_sample, type_d=int)
+        self.train_parameters.set_param(param="warm_up", value=args.warm_up, type_d=int)
+        self.train_parameters.set_param(param="swa", value=args.swa, type_d=bool)
+        self.train_parameters.set_param(param="ema", value=args.ema, type_d=bool)
+        self.train_parameters.set_param(param="wandb_report", value=args.wandb, type_d=bool)
 
 
     def load_json_params(self, json_file):
@@ -236,5 +240,6 @@ class ConfigModel:
         parser_train.add_argument("-mem_p", "--memory_report", help="memory profiling")
         parser_train.add_argument("-imb_w", "--imbalance_weight", help="imbalance weight")
         parser_train.add_argument("-imb_s", "--imbalance_sample", help="imbalance sample")
+        parser_train.add_argument("-w_u", "--warm_up", help="warm_up period", default=0)
 
         return parser.parse_args()

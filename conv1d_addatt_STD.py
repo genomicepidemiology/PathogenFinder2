@@ -26,11 +26,11 @@ class Conv1D_AddAtt_Net(nn.Module):
         if batch_norm:
             self.in_layer = nn.Sequential(OrderedDict([
                 ("batchnorm", nn.BatchNorm2d(conv_in_features[0])),
-                ("drop_in", nn.Dropout(dropout_in))
+                ("drop_in", nn.Dropout1d(dropout_in))
             ]))
         else:
             self.in_layer = nn.Sequential(OrderedDict([
-                ("drop_in", nn.Dropout(dropout_in))
+                ("drop_in", nn.Dropout1d(dropout_in))
             ]))
 
         self.layer_conv1 = nn.Sequential(OrderedDict([
@@ -38,21 +38,21 @@ class Conv1D_AddAtt_Net(nn.Module):
                         kernel_size=kernel_sizes[0],
                         stride=1, padding=kernel_sizes[0]//2)),
             ("activation", nn.ReLU()),
-            ("dropout", nn.Dropout(dropout_conv))]))
+            ("dropout", nn.Dropout1d(dropout_conv))]))
 
         self.layer_conv2 = nn.Sequential(OrderedDict([
             ("conv1d", nn.Conv1d(conv_in_features[1], conv_in_features[2],
                                     kernel_size=kernel_sizes[1],
                                     stride=1, padding=kernel_sizes[1]//2)),
             ("activation", nn.ReLU()),
-            ("dropout", nn.Dropout(dropout_conv))]))
+            ("dropout", nn.Dropout1d(dropout_conv))]))
 
         self.layer_conv3 = nn.Sequential(OrderedDict([
             ("conv1d", nn.Conv1d(conv_in_features[2], conv_out_dim,
                                     kernel_size=kernel_sizes[2],
                                     stride=1, padding=kernel_sizes[2]//2)),
             ("activation", nn.ReLU()),
-            ("dropout", nn.Dropout(dropout_conv))]))
+            ("dropout", nn.Dropout1d(dropout_conv))]))
 
         self.linear_in_att = nn.Linear(conv_out_dim, att_size)
         self.linear_att = nn.Linear(att_size, 1, bias=False)
@@ -85,7 +85,6 @@ class Conv1D_AddAtt_Net(nn.Module):
         att_hid_align = self.att_act(att_vector) # [bs, seq_len, att_size]
         att_hid_align = self.dropout_att(att_hid_align)
         att_score = self.linear_att(att_hid_align).squeeze(2) # [bs, seq_len]
-
         mask = Conv1D_AddAtt_Net.length_to_negative_mask(seq_lengths)
         alpha = F.softmax(att_score + mask, dim=1) # [bs, seq_len]
         att = alpha.unsqueeze(2) # [bs, seq_len, 1]
@@ -112,6 +111,7 @@ class Conv1D_AddAtt_Net(nn.Module):
         return mask
 
     def forward(self, x, seq_lengths):
+        x = self.in_layer(x)
         x = x.permute(0, 2, 1)
         ## Convolutional ##
         x = self.layer_conv1(x)
