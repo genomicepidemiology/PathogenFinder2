@@ -188,8 +188,9 @@ class Train_NeuralNet():
         return predictions, loss
 
     def scheduler_step(self, value=False):
-        if value:
-            self.lr_scheduler.step(value)
+        print(value)
+        if value is not False:
+            self.lr_scheduler.step(np.nanmean(value))
         else:
             self.lr_scheduler.step()
 
