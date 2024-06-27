@@ -100,15 +100,14 @@ class ProteomeDataset(Dataset):
         if not weighted:
             self.weights = torch.Tensor([1.])
         else:
-            weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame,
-                                patho_pred=self.dict_patho)
+            weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame)
             self.weights = torch.Tensor(weights)
 
     def get_weights(self):
         return self.weights
 
     @staticmethod
-    def get_weights_classes(df, patho_pred, homology_sample=False):
+    def get_weights_classes(df, homology_sample=False):
         counts_patho = df["PathoPhenotype"].value_counts().to_frame()
         weights = [float(counts_patho.loc["No Pathogenic","count"])/float(counts_patho.loc["Pathogenic","count"])]
         return weights
@@ -313,7 +312,7 @@ class ProteomeDataset_Old(Dataset):
             self.weights = torch.Tensor([1.])
         else:
             weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame,
-                                patho_pred=self.dict_patho)
+                                )
             self.weights = torch.Tensor(weights)
         
         self.fraction_embeddings = fraction_embeddings
@@ -322,7 +321,7 @@ class ProteomeDataset_Old(Dataset):
         return self.weights
 
     @staticmethod
-    def get_weights_classes(df, patho_pred, homology_sample=False):
+    def get_weights_classes(df, homology_sample=False):
         counts_patho = df["PathoPhenotype"].value_counts().to_frame()
         weights = [float(counts_patho.loc["No Pathogenic","count"])/float(counts_patho.loc["Pathogenic","count"])]
         return weights
