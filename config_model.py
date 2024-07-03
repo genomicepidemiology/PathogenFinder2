@@ -65,6 +65,9 @@ class ConfigModel:
         self.misc_parameters = self.init_misc_parameters()
         self.model_parameters = self.init_model_parameters()
         self.train_parameters = self.init_train_parameters()
+        self.pred_parameters = self.init_pred_parameters()
+        self.test_parameters = self.init_test_parameters()
+
 
     def init_misc_parameters(self):
         misc_parameters = ParamsModel(name_params="Misc Parameters")
@@ -75,7 +78,7 @@ class ConfigModel:
     def init_model_parameters(self):
         model_parameters = ParamsModel(name_params="Model Parameters")
         model_parameters.init_params(
-                list_params=["attention_type", "in_dropout", "n_conv_l", "kernels",
+                list_params=["batch_size", "attention_type", "in_dropout", "n_conv_l", "kernels",
                     "in_conv_dim", "conv_dropout", "conv_act", "conv_init",
                     "att_in_dim", "att_size", "att_init_hid", "att_act",
                     "att_init_layer", "att_dropout", "fnn_layers", "fnn_dim",
@@ -87,14 +90,26 @@ class ConfigModel:
     def init_train_parameters(self):
         train_parameters = ParamsModel(name_params="Train Parameters")
         train_parameters.init_params(
-                list_params=["batch_size", "optimizer", "learning_rate",
+                list_params=["optimizer", "learning_rate",
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
-                    "weight_decay", "lr_end", "fused_OptBack", "clipping", "bucketing",
+                    "weight_decay", "lr_end", "fused_OptBack", "clipping",
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
                     "train_results", "memory_report", "results_dir", "compiler", "normalize",
                     "bucketing", "warm_up", "swa", "ema", "wandb_report"])
         return train_parameters
+
+    def init_pred_parameters(self):
+        pred_parameters = ParamsModel(name_params="Prediction Parameters")
+        pred_parameters.init_params(
+                list_params=["pred_df", "pred_loc"])
+        return pred_parameters
+
+    def init_test_parameters(self):
+        test_parameters = ParamsModel(name_params="Test Parameters")
+        test_parameters.init_params(
+                list_params=["test_df", "test_loc"])
+        return test_parameters
 
     def standard_init_model(self):
 
@@ -115,6 +130,7 @@ class ConfigModel:
         pass
     
     def load_model_params(self, args):
+        self.model_parameters.set_param(param="batch_size", value=args.batch_size, type_d=int)
         self.model_parameters.set_param(param="n_conv_l", value=args.conv_layers, type_d=int)
         self.model_parameters.set_param(param="kernels", value=args.kernels, type_d=list)
         self.model_parameters.set_param(param="in_conv_dim", value=args.conv_dim, type_d=list)
@@ -131,7 +147,6 @@ class ConfigModel:
         self.model_parameters.set_param(param="layer_norm", value=args.layer_norm, type_d=bool)
     
     def load_train_params(self, args):
-        self.train_parameters.set_param(param="batch_size", value=args.batch_size, type_d=int)
         self.train_parameters.set_param(param="optimizer", value=args.optimizer, type_d=str)
         self.train_parameters.set_param(param="learning_rate", value=args.learning_rate, type_d=float)
         self.train_parameters.set_param(param="epochs", value=args.epochs, type_d=int)
@@ -160,6 +175,13 @@ class ConfigModel:
         self.train_parameters.set_param(param="ema", value=args.ema, type_d=bool)
         self.train_parameters.set_param(param="wandb_report", value=args.wandb, type_d=bool)
 
+    def load_test_params(self, args):
+        self.test_parameters.set_param(param="test_df", value=args.test_df, type_d=str)
+        self.test_parameters.set_param(param="test_loc", value=args.test_loc, type_d=str)
+
+    def load_pred_params(self, args):
+        self.pred_parameters.set_param(param="pred_df", value=args.pred_df, type_d=str)
+        self.pred_parameters.set_param(param="pred_loc", value=args.pred_loc, type_d=str)
 
     def load_json_params(self, json_file):
         with open(json_file, "r") as f:
@@ -170,6 +192,10 @@ class ConfigModel:
                     self.model_parameters.set_param(param=k, value=val)       
                 elif params == "Train Params":
                     self.train_parameters.set_param(param=k, value=val)
+                elif params == "Prediction Params":
+                    self.pred_parameters.set_param(param=k, value=val)
+                elif params == "Test Params":
+                    self.test_parameters.set_param(param=k, value=val)
     
     def save_data(self, file_save):
         data_save = {"Model Params": dict(self.model_parameters),
@@ -185,10 +211,8 @@ class ConfigModel:
                             metavar="FILE", type=lambda x: is_valid_file(parser, x),
                             default=False)
         parser.add_argument("-train", "--train", help="do training", action="store_true")
-        parser.add_argument("-predict", "--predict", help="predict from file",
-                            metavar="FILE", 
-                            type=lambda x: is_valid_file(parser, x),
-                            default=False)
+        parser.add_argument("-predict", "--predict", help="predict from file", action="store_true")
+        parser.add_argument("-test", "--test", help="Test", action="store_true")
         parser_model = parser.add_argument_group('Model Parameters')
         parser_model.add_argument("-m", "--model_type", help="model type",
                                 default="additive")
@@ -241,5 +265,15 @@ class ConfigModel:
         parser_train.add_argument("-imb_w", "--imbalance_weight", help="imbalance weight")
         parser_train.add_argument("-imb_s", "--imbalance_sample", help="imbalance sample")
         parser_train.add_argument("-w_u", "--warm_up", help="warm_up period", default=0)
+        parser_train.add_argument("-w_r", "--wandb_report", help="wandb_report", type=int, default=None)
+
+
+        parser_prediction = parser.add_argument_group('Prediction Parameters')
+        parser_prediction.add_argument("-pred_d", "--pred_df", help="pred_df")
+        parser_prediction.add_argument("-pred_l", "--pred_loc", help="pred_loc")
+
+        parser_test = parser.add_argument_group('Test Parameters')
+        parser_test.add_argument("-test_d", "--test_df", help="test_df")
+        parser_test.add_argument("-test_l", "--test_loc", help="test_loc")
 
         return parser.parse_args()

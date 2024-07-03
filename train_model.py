@@ -2,12 +2,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
+from torch.optim.lr_scheduler import LambdaLR, OneCycleLR
 import pytorch_warmup as warmup
 from tqdm import tqdm
-import h5py
-import pickle
-import gc
 import os
 import numpy as np
 import sys
@@ -19,25 +16,26 @@ sys.dont_write_bytecode = True
 
 from data_utils import ProteomeDataset, ToTensor, Normalize_Data, BucketSampler, FractionEmbeddings, PhenotypeInteger
 from results_record import Json_Results
+from utils import NNUtils
 
 
 class Train_NeuralNet():
     MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
 
     def __init__(self, network, configuration=None, loss_function=None, results_dir=None, memory_report=False, 
-		compiler=False, wandb_results=True, mixed_precision=False):
+		compiler=False, mixed_precision=False, results_module=None, wandb_report=False):
 
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6' 
         torch.cuda.empty_cache()
 
-        self.results_dir = self.set_results_files(results_dir=results_dir)
+        self.results_dir = results_dir
         if memory_report:
             self.profiler = self.start_memory_reports()
         else:
             self.profiler = None
 
 
-        self.device = self.get_device()
+        self.device = NNUtils.get_device()
         print("Training on {}".format(self.device))
         network = network.to(self.device)
         if not compiler:
@@ -52,8 +50,9 @@ class Train_NeuralNet():
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
 
 
-        self.results_training = Json_Results(wandb_results=wandb_results, configuration=configuration,
-						name=os.path.basename(self.results_dir), model=self.network, criterion=self.loss)
+        self.results_training = Json_Results(wandb_results=wandb_report, configuration=configuration,
+                                           name=os.path.basename(self.results_dir), model=self.network,
+                                           criterion=self.loss)
         self.saved_model = {"epoch": None, 'model_state_dict': None, 'optimizer_state_dict': None,
 				'loss': None, "val_measure": None}
 
@@ -109,21 +108,6 @@ class Train_NeuralNet():
             torch.cuda.memory._dump_snapshot("{}/memory_record.pkl".format(self.results_dir))
             torch.cuda.memory._record_memory_history(enabled=None)
 
-
-    def set_results_files(self, results_dir):
-
-        timestamp = str(datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
-
-        results_dir = "{}_{}".format(results_dir, timestamp)
-        if not os.path.isdir(results_dir):
-            os.mkdir(results_dir)
-        return results_dir
-
-    def get_device(self):
-        if torch.cuda.is_available():
-            return "cuda"
-        else:
-            return "cpu"
 
     def create_dataset(self, data_df, data_loc, data_type="train", dual_pred=False, cluster_sample=False,
                         cluster_tsv=None, weighted=False, normalize=False, fraction_embeddings=False):
@@ -189,7 +173,7 @@ class Train_NeuralNet():
 
     def scheduler_step(self, value=False):
         if value is not False:
-            self.lr_scheduler.step(np.nanmean(value))
+            self.lr_scheduler.step(value)
         else:
             self.lr_scheduler.step()
 
@@ -209,16 +193,18 @@ class Train_NeuralNet():
     def train_pass(self, train_loader, profiler=None, asynchronity=False, clipping=False):
 
         loss_lst = []
-        prediction_lst = []
-        labels_lst = []
+        mcc_lst = []
         lr_rate_lst = []
-
+        loss_pass = 0.
+        mcc_pass = 0.
+        count = 0
+        len_dataloader = len(train_loader) 
         for batch in tqdm(train_loader):
             if self.profiler is not None:
                 self.profiler.step()
             embeddings = batch["Embeddings"]
             labels = batch["PathoPhenotype"]
-            lengths = batch["Proteome_Length"]
+            lengths = batch["Protein Count"]
             #  sending data to device
             embeddings = embeddings.to(self.device, non_blocking=asynchronity)
             labels = labels.to(self.device, non_blocking=asynchronity)
@@ -247,20 +233,30 @@ class Train_NeuralNet():
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
                 self.update_scheduler()          
             #  computing loss
-            loss_c = loss.detach().cpu().tolist()
-            pred_c = predictions.detach().cpu().numpy()
-            label_c = labels.detach().cpu().numpy()
-            loss_lst.append(loss_c)
-            prediction_lst.append(pred_c)
-            labels_lst.append(label_c)
+            loss_c = loss.detach()
+            if torch.isnan(loss_c):
+                print("FILE WRONG: ", batch["File_Names"])
+            pred_c = predictions.detach()
+            label_c = labels.detach()
+            loss_pass += loss_c
+            mcc = Json_Results.calculate_metrics_GPU(labels=label_c, predictions=pred_c)
+            mcc_pass += mcc
+            self.results_training.step_log(loss_train=loss_c, lr=self.optimizer.param_groups[-1]['lr'], batch_n=count,
+                                             len_dataloader=len_dataloader)
             #  clean gpu (maybe unnecessary)
-        return np.array(loss_lst), np.concatenate(prediction_lst, axis=0), np.concatenate(labels_lst, axis=0), np.array(lr_rate_lst), profiler
+            count += 1
+        loss_pass = loss_pass/count
+        mcc_pass = mcc_pass/count
+        return loss_pass, mcc_pass, lr_rate_lst, profiler
 
     def val_pass(self, val_loader, last_epoch=False, profiler=None, asynchronity=False):
 
         loss_lst = []
-        prediction_lst = []
-        labels_lst = []
+        mcc_lst = []
+        
+        loss_pass = 0.
+        mcc_pass = 0.
+        count = 0
 
         if last_epoch:
             att_results = {"Genomes": [], "Proteins":[], "Attentions": []}
@@ -273,7 +269,7 @@ class Train_NeuralNet():
                     self.profiler.step()
                 embeddings = batch["Embeddings"]
                 labels = batch["PathoPhenotype"]
-                lengths = batch["Proteome_Length"]
+                lengths = batch["Protein Count"]
                 #  sending data to device
                 embeddings = embeddings.to(self.device, non_blocking=asynchronity)
                 labels = labels.to(self.device, non_blocking=asynchronity)
@@ -283,12 +279,14 @@ class Train_NeuralNet():
                 predictions, loss = self.calculate_loss(
                                        	 predictions_logit=predictions_logit, labels=labels)
                 #  computing loss
-                loss_c = loss.detach().cpu()
-                pred_c = predictions.detach().cpu().numpy()
-                label_c = labels.detach().cpu().numpy()
-                loss_lst.append(loss_c)
-                prediction_lst.append(pred_c)
-                labels_lst.append(label_c)
+                loss_c = loss.detach()
+                pred_c = predictions.detach()
+                label_c = labels.detach()
+                loss_pass += loss_c
+                if torch.isnan(loss_c):
+                    print("FILE WRONG: ", batch["File_Names"])
+                mcc = Json_Results.calculate_metrics_GPU(labels=label_c, predictions=pred_c)
+                mcc_pass += mcc
 
                 if last_epoch:
                     genome_names = batch["File_Names"]
@@ -298,10 +296,13 @@ class Train_NeuralNet():
                     attentions = attentions.detach().cpu().numpy()
                     att_results["Attentions"].append(attentions)
                 #  clean gpu (maybe unnecessary
+                count += 1
+        loss_pass = loss_pass/count
+        mcc_pass = loss_pass/count
         if last_epoch:
-            return np.array(loss_lst), np.concatenate(prediction_lst, axis=0), np.concatenate(labels_lst, axis=0), att_results, profiler
+            return loss_lst, mcc_lst, att_results, profiler
         else:
-            return np.array(loss_lst), np.concatenate(prediction_lst, axis=0), np.concatenate(labels_lst, axis=0), profiler
+            return loss_pass, mcc_pass, profiler
 
     def best_epoch_retain(self, new_val, optimizer, model, epoch, loss):
         if self.saved_model["val_measure"] is not None and self.saved_model["val_measure"] > new_val:
@@ -337,40 +338,33 @@ class Train_NeuralNet():
         for epoch in range(epochs):
             print(f'Epoch {epoch+1}/{epochs}') 
             #  training
-            loss_train, prediction_train, labels_train, lr_rate, profiler = self.train_pass(
-                                                                    train_loader=train_loader,
-                                                                    clipping=clipping)
+            loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping)
 
             #  validation
             print('validating...')
-            if epoch >= epochs-1:
-                loss_val, prediction_val, labels_val, att_results, profiler = self.val_pass(
-		                                                                val_loader=val_loader, last_epoch=True)
-                self.results_training.add_lastmodel_data(prot_names=att_results["Proteins"], genome_names=att_results["Genomes"],
-								attentions=att_results["Attentions"])
-            else:
-                loss_val, prediction_val, labels_val, profilerr = self.val_pass(
-                                                                    val_loader=val_loader)
-            mcc_t, acc_t = Json_Results.calculate_metrics(labels=labels_train, predictions=prediction_train)
-            mcc_v, acc_v = Json_Results.calculate_metrics(labels=labels_val, predictions=prediction_val)
+ #           if epoch >= epochs-1:
+   #         if False:
+  #              loss_val, mcc_v, att_results, profiler = self.val_pass(val_loader=val_loader, last_epoch=True)
+ #               self.results_training.add_lastmodel_data(prot_names=att_results["Proteins"], genome_names=att_results["Genomes"],
+#								attentions=att_results["Attentions"])
+ #           else:
+            loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader)
 
-            self.results_training.add_epoch_report(epoch=epoch, loss_t=loss_train, labels_t=labels_train,
-                                        predictions_t=prediction_train, loss_v=loss_val, labels_v=labels_val,
-					predictions_v=prediction_val, lr=lr_rate, mcc_t=mcc_t, acc_t=acc_t,
-                                        mcc_v=mcc_v, acc_v=acc_v)
+            self.results_training.add_epoch_report(epoch=epoch, loss_t=loss_train, loss_v=loss_val, 
+                                                   lr=lr_rate, mcc_t=mcc_t, mcc_v=mcc_v)
             if stop_method == "early_stopping":
                 pass
             elif stop_method == "best_epoch":
                 self.saved_model = self.best_epoch_retain(new_val=mcc_v, optimizer=self.optimizer, model=self.network, epoch=epoch, loss=loss_train)
             else:
-                self.saved_model = {"epoch": epoch, 'model_state_dict': self.network.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict(),
-                                'loss': loss_train, "val_measure": mcc_v}
+#                self.saved_model = {"epoch": epoch, 'model_state_dict': self.network.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict(),
+ #                               'loss': loss_train, "val_measure": mcc_v}
+                pass
 
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
                 self.update_scheduler(value=loss_val)
-            print("training_loss: {}, validation_loss: {}, valClust_loss".format(
-                round(np.mean(loss_train), 4), round(np.mean(loss_val), 4))
-            )
+            print("training_loss: {}, validation_loss: {}".format(
+                loss_train, loss_val))
         if self.profiler is not None:
             self.stop_memory_reports()
         return self.saved_model
@@ -387,11 +381,7 @@ class Train_NeuralNet():
 
         swa_utils.update_bn(train_loader, swa_model)
         return swa_model
-        
-
-    def savedict_train_results(self):
-        self.results_training.save_results(self.results_dir)
-    
+   
     def save_model(self, model, type_save="state_dict"):
         path = "{}/model.pth".format(self.results_dir)
         if type_save == "state_dict":

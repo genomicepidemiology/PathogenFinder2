@@ -19,17 +19,32 @@ sys.dont_write_bytecode = True
 from conv1d_addatt_STD import Conv1D_AddAtt_Net
 from config_model import ConfigModel, ParamsModel
 from train_model import Train_NeuralNet
+from prediction import Prediction_NeuralNet
+from utils import NNUtils
+from results_record import Json_Results
+
 
 
 class Compile_Model:
 
     Dim_prot = 1024
 
-    def __init__(self, model_type="additive"):
+    def __init__(self, model_arguments):
 
-        self.config = ConfigModel(model_type=model_type)
-        self.model = None
-        self.model_carcass = self.get_model_carcass(model_type=model_type)
+        self.config = ConfigModel(model_type=model_arguments.model_type)
+        self.model_carcass = self.get_model_carcass(model_type=model_arguments.model_type)
+
+        if model_arguments.json_INdata:
+            self.load_json(json_file=model_arguments.json_INdata)
+        else:
+            self.load_model_params(args=model_arguments)
+            self.load_train_params(args=model_arguments)
+
+        self.set_model()
+
+        self.results_dir = NNUtils.set_results_files(
+				results_dir=self.config.train_parameters["results_dir"])
+
 
     def get_model_carcass(self, model_type):
         if model_type == "additive":
@@ -144,11 +159,11 @@ class Compile_Model:
         # Define Model
         train_instance = Train_NeuralNet(network=self.model, configuration=self.config,
                             loss_function=self.config.train_parameters["loss_function"],
-                            results_dir=self.config.train_parameters["results_dir"],
+                            results_dir=self.results_dir,
                             memory_report=self.config.train_parameters["memory_report"],
                             mixed_precision=self.config.train_parameters["mix_prec"],
                             compiler=self.config.train_parameters["compiler"],
-			    wandb_results=self.config.train_parameters["wandb_report"])
+			    wandb_report=self.config.train_parameters["wandb_report"])
         # Create Train data
         train_instance.create_dataset(data_df=self.config.train_parameters["train_df"],
                             data_loc=self.config.train_parameters["train_loc"],
@@ -169,24 +184,20 @@ class Compile_Model:
                             fraction_embeddings=self.config.train_parameters["prot_dim_split"])
 
         # Train Model
-        print(self.config.train_parameters["wandb_report"])
         self.config.model_parameters["train_status"] = "Start"
         best_model = train_instance.train(epochs=self.config.train_parameters["epochs"],
-                            batch_size=self.config.train_parameters["batch_size"],
+                            batch_size=self.config.model_parameters["batch_size"],
                             optimizer=self.config.train_parameters["optimizer"],
                             learning_rate=self.config.train_parameters["learning_rate"], 
                             weight_decay=self.config.train_parameters["weight_decay"],
                             lr_schedule=self.config.train_parameters["lr_scheduler"],
                             end_lr=self.config.train_parameters["lr_end"],
                             amsgrad=False, num_workers=2,
-#                            mixed_precision=self.config.train_parameters["mix_prec"],
                             asynchronity=self.config.train_parameters["asynchronity"],
                             clipping=self.config.train_parameters["clipping"],
                             bucketing=self.config.train_parameters["bucketing"],
                             warmup_period=self.config.train_parameters["warm_up"])
-
-        if report == "dictionary":
-            train_instance.savedict_train_results()      
+     
 
         if self.config.model_parameters["saved_model"]:
             self.save_model(self.config.model_parameters["saved_model"])
@@ -195,23 +206,37 @@ class Compile_Model:
         train_instance.save_model(best_model)
 
         return train_instance.results_dir
-                  
+
+    def predict_model(self, data):
+        if self.model is None:
+            raise ValueError("Set the Model First")
+        if report not in ["dictionary", "wandb", "tensorboard"]:
+            raise KeyError("The type of report {} is not available".format(report))
+
+        pred_instance.create_dataset(data_df=self.config.train_parameters["val_df"],
+                            data_loc=self.config.train_parameters["val_loc"],
+                            data_type="validation",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+
+
 
 if __name__ == "__main__":
     model_arguments = ConfigModel.arguments_model()
 
-    compiled_model = Compile_Model(model_type=model_arguments.model_type)
+    compiled_model = Compile_Model(model_arguments=model_arguments)
     if model_arguments.json_INdata:
         compiled_model.load_json(json_file=model_arguments.json_INdata)
     else:
         compiled_model.load_model_params(args=model_arguments)
         compiled_model.load_train_params(args=model_arguments)
-    compiled_model.set_model()
 
     config = compiled_model.get_config()
 
     if model_arguments.train:
         results_dir_train = compiled_model.train_model()
         config.save_data("{}/config_file.json".format(results_dir_train))
-    elif model_arguments.predict:
-        pass
+    if model_arguments.predict:
+        compiled_model.predict_model()

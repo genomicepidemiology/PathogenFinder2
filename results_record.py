@@ -1,11 +1,14 @@
 import wandb
 import pickle
+from torchmetrics.classification import BinaryMatthewsCorrCoef
 from sklearn.metrics import balanced_accuracy_score, matthews_corrcoef
 import numpy as np
 
 
 
 class Json_Results:
+    
+    batch_checkpoint = 2
 
     def __init__(self, wandb_results=False, configuration=None, name="",
 			model=None, criterion=None):
@@ -19,8 +22,10 @@ class Json_Results:
             self.wandb_run = self.initiate_wandb(project="PathogenFinder2", name=name,
 					configuration=configuration, wandb_results=wandb_results)
             self.wandb_run.watch(model, criterion, log="all", log_freq=1)
+            self.step_wandb = 0
         else:
             self.wandb_run = False
+        self.epoch_n = 0
 
 
     def initiate_wandb(self, project, name, configuration, wandb_results):
@@ -34,16 +39,27 @@ class Json_Results:
         mcc = matthews_corrcoef(labels, predictions_binary)
         return acc, mcc
 
+    @staticmethod
+    def calculate_metrics_GPU(predictions, labels):
+        metric = BinaryMatthewsCorrCoef().to("cuda")
+        mcc = metric(predictions, labels)
+        return mcc
 
-    def log_wandb(self, loss_t, loss_v, labels_t, labels_v, predictions_t,
-			predictions_v, epoch, learning_rate, mcc_t, mcc_v, 
-			acc_t, acc_v):
+    def log_wandb(self, loss_t, loss_v, epoch, learning_rate, mcc_t, mcc_v):
 
-        log_results = {"epoch": epoch, "Training_loss": np.nanmean(loss_t),
-                   "Validation_loss": np.nanmean(loss_v), "Training_balanced_accuracy": acc_t,
-                   "Validation_balanced_accuracy": acc_v, "Training_mcc": mcc_t, "Validation_mcc": mcc_v,
-		   "Learning_rate": np.mean(learning_rate)}
-        wandb.log(log_results, step=epoch)
+        log_results = {"Training Loss": loss_t,
+                   "Validation Loss": loss_v, "Training MCC": mcc_t,
+                   "Validation MCC": mcc_v,
+		   }
+        wandb.log(log_results, step=self.step_wandb)
+
+    def step_log(self, loss_train, lr, batch_n, len_dataloader):
+        if batch_n % Json_Results.batch_checkpoint == Json_Results.batch_checkpoint-1:
+            wandb.log({"Training Loss/Step": loss_train, "Learning Rate": lr, "Epoch": self.epoch_n + ((batch_n+1)/len_dataloader)}, step=self.step_wandb)
+            self.step_wandb += 1
+
+    def time_log(self, epoch_duration):
+        wandb.log({"Epoch Runtime (seconds)": epoch_duration}, step=self.step_wandb)
 
     @staticmethod
     def _add_data(add_to, data):
@@ -52,19 +68,17 @@ class Json_Results:
         else:
             add_to.append(data)
 
-    def add_epoch_report(self, epoch, loss_t, loss_v, labels_t, labels_v, predictions_t,
-				predictions_v, lr, mcc_t, mcc_v, acc_t, acc_v):
+    def add_epoch_report(self, epoch, loss_t, loss_v, lr, mcc_t, mcc_v):
 
-        training_results = {"Loss": loss_t, "Prediction": predictions_t, "Labels": labels_t}
-        validation_results = {"Loss": loss_v, "Prediction": predictions_v, "Labels": labels_v}
-        self.epochs_training[epoch] = {"Training": training_results,
-				       "Validation": validation_results,
-				       "Learning Rate": lr}
+        #training_results = {"Loss": loss_t, "MCC": mcc_t}
+        #validation_results = {"Loss": loss_v, "MCC": mcc_v}
+        #self.epochs_training[epoch] = {"Training": training_results,
+	#			       "Validation": validation_results,
+	#			       "Learning Rate": lr}
 
         if self.wandb_run:
-            self.log_wandb(loss_t=loss_t, loss_v=loss_v, labels_t=labels_t, labels_v=labels_v,
-				predictions_t=predictions_t, predictions_v=predictions_v, epoch=epoch,
-			learning_rate=lr, mcc_t=mcc_t, mcc_v=mcc_v, acc_t=acc_t, acc_v=acc_v)
+            self.log_wandb(loss_t=loss_t, loss_v=loss_v, epoch=epoch, learning_rate=lr, mcc_t=mcc_t, mcc_v=mcc_v)
+        self.epoch_n += 1
 
     def add_lastmodel_data(self, prot_names, genome_names, attentions):
         Json_Results._add_data(add_to=self.last_model_data["Protein Names"], data=prot_names)

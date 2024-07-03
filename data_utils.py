@@ -94,7 +94,7 @@ class ProteomeDataset(Dataset):
 
     def __init__(self, csv_file, root_dir, sampling=False,
                  cluster_tsv=None, transform=None, weighted=False,
-                 load_data=True, device="cpu"):
+                 load_data=True):
         self.landmarks_frame = pd.read_csv(csv_file, sep="\t")
         self.root_dir = os.path.abspath(root_dir)
         self.transform = transform
@@ -104,7 +104,6 @@ class ProteomeDataset(Dataset):
             weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame)
             self.weights = torch.Tensor(weights)
         self.load_data = load_data
-        self.device = device
 
     def get_weights(self):
         return self.weights

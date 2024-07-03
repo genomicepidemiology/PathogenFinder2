@@ -3,6 +3,8 @@ import json
 from torch import nn
 import types
 import torch
+from datetime import datetime
+
 
 def is_valid_file(parser, arg):
     if not os.path.exists(arg):
@@ -19,6 +21,25 @@ class NNEncoder(json.JSONEncoder):
         if obj.__class__.__name__ == "type":
             return obj.__name__
         return super(NNEncoder, self).default(obj)
+
+class NNUtils():
+    
+    @staticmethod
+    def get_device():
+        if torch.cuda.is_available():
+            return "cuda"
+        else:
+            return "cpu"
+
+    @staticmethod
+    def set_results_files(results_dir):
+
+        timestamp = str(datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
+
+        results_dir = "{}_{}".format(results_dir, timestamp)
+        if not os.path.isdir(results_dir):
+            os.mkdir(results_dir)
+        return results_dir
 
 
 class Get_Normalization:
