@@ -24,6 +24,7 @@ class ParamsModel(UserDict):
     function_param = {
             "Adam": torch.optim.Adam,
             "AdamW": torch.optim.AdamW,
+            "RAdam": torch.optim.RAdam,
             "BCELoss": nn.BCELoss,
             "BCEWithLogitsLoss": nn.BCEWithLogitsLoss,
             "xavier_init": nn.init.xavier_normal_,

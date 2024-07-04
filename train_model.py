@@ -64,9 +64,13 @@ class Train_NeuralNet():
             for p in self.network.parameters():
                 p.register_post_accumulate_grad_hook(Train_NeuralNet.optimizer_hook)
         else:
-            self.optimizer = optimizer(self.network.parameters(),
+            if optimizer.__class__.__name__ == "Adam" or optimizer.__class__.__name__ == "AdamW":
+                self.optimizer = optimizer(self.network.parameters(),
                                             lr=learning_rate, weight_decay=weight_decay,
                                             amsgrad=amsgrad)
+            elif optimizer.__class__.__name__ == "RAdam":
+                self.optimizer = optimizer(self.network.parameters(),
+                                            lr=learning_rate, weight_decay=weight_decay, decoupled_weight_decay=True)
         if lr_schedule:
             self.lr_scheduler = self.set_schedule_lr(optimizer=self.optimizer, end_lr=end_lr,
                                             scheduler_type=lr_schedule,
