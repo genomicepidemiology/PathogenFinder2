@@ -54,12 +54,13 @@ class Json_Results:
         wandb.log(log_results, step=self.step_wandb)
 
     def step_log(self, loss_train, lr, batch_n, len_dataloader):
-        if batch_n % Json_Results.batch_checkpoint == Json_Results.batch_checkpoint-1:
+        if batch_n % Json_Results.batch_checkpoint == Json_Results.batch_checkpoint-1 and self.wandb_run:
             wandb.log({"Training Loss/Step": loss_train, "Learning Rate": lr, "Epoch": self.epoch_n + ((batch_n+1)/len_dataloader)}, step=self.step_wandb)
             self.step_wandb += 1
 
     def time_log(self, epoch_duration):
-        wandb.log({"Epoch Runtime (seconds)": epoch_duration}, step=self.step_wandb)
+        if self.wandb_run:
+            wandb.log({"Epoch Runtime (seconds)": epoch_duration}, step=self.step_wandb)
 
     @staticmethod
     def _add_data(add_to, data):

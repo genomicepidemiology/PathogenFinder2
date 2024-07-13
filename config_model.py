@@ -24,7 +24,6 @@ class ParamsModel(UserDict):
     function_param = {
             "Adam": torch.optim.Adam,
             "AdamW": torch.optim.AdamW,
-            "RAdam": torch.optim.RAdam,
             "BCELoss": nn.BCELoss,
             "BCEWithLogitsLoss": nn.BCEWithLogitsLoss,
             "xavier_init": nn.init.xavier_normal_,
@@ -81,8 +80,7 @@ class ConfigModel:
         model_parameters.init_params(
                 list_params=["batch_size", "attention_type", "in_dropout", "n_conv_l", "kernels",
                     "in_conv_dim", "conv_dropout", "conv_act", "conv_init",
-                    "att_in_dim", "att_size", "att_init_hid", "att_act",
-                    "att_init_layer", "att_dropout", "fnn_layers", "fnn_dim",
+                    "att_in_dim", "att_init", "att_dropout", "fnn_layers", "fnn_dim",
                     "fnn_act", "fnn_init", "fnn_dropout", "out_dim", "out_init", "out_sigmoid",
                     "batch_norm", "layer_norm", "train_status", "saved_model",
                     "mode"])
@@ -117,9 +115,9 @@ class ConfigModel:
         self.model_parameters.set_param(param="conv_act", value="ReLU", type_d="function")
         self.model_parameters.set_param(param="conv_init", value="kaiming_init", type_d="function")
         self.model_parameters.set_param(param="attention_type", value=self.model_type, type_d=str)
-        self.model_parameters.set_param(param="att_init_hid", value="xavier_init", type_d="function")
-        self.model_parameters.set_param(param="att_act", value="Tanh", type_d="function")
-        self.model_parameters.set_param(param="att_init_layer", value="xavier_init", type_d="function")
+        self.model_parameters.set_param(param="att_init", value="xavier_init", type_d="function")
+ #       self.model_parameters.set_param(param="att_act", value="Tanh", type_d="function")
+#        self.model_parameters.set_param(param="att_init_layer", value="xavier_init", type_d="function")
         self.model_parameters.set_param(param="fnn_act", value="LeakyReLU", type_d="function")
         self.model_parameters.set_param(param="fnn_init", value="kaiming_init", type_d="function")
         self.model_parameters.set_param(param="out_init", value="xavier_init", type_d="function")
@@ -137,7 +135,7 @@ class ConfigModel:
         self.model_parameters.set_param(param="in_conv_dim", value=args.conv_dim, type_d=list)
         self.model_parameters.set_param(param="conv_dropout", value=args.conv_dropout, type_d=float)
         self.model_parameters.set_param(param="att_in_dim", value=args.attention_dim_in, type_d=int)
-        self.model_parameters.set_param(param="att_size", value=args.attention_size, type_d=int)
+ #       self.model_parameters.set_param(param="att_size", value=args.attention_size, type_d=int)
         self.model_parameters.set_param(param="att_dropout", value=args.attention_dropout, type_d=float)
         self.model_parameters.set_param(param="fnn_layers", value=args.fnn_layers, type_d=int)
         self.model_parameters.set_param(param="fnn_dim", value=args.fnn_hidden, type_d=int)

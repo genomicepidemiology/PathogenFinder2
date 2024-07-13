@@ -60,7 +60,7 @@ class Compile_Model:
                         conv_out_dim=self.config.model_parameters["att_in_dim"],
                         nodes_fnn=self.config.model_parameters["fnn_dim"],
                         dropout_conv=self.config.model_parameters["conv_dropout"],
-                        att_size=self.config.model_parameters["att_size"],
+ #                       att_size=self.config.model_parameters["att_size"],
                         dropout_fnn=self.config.model_parameters["fnn_dropout"],
                         dropout_att=self.config.model_parameters["att_dropout"],
                         dropout_in=self.config.model_parameters["in_dropout"],
@@ -79,12 +79,12 @@ class Compile_Model:
         Conv1D_AddAtt_Net.init_weights(module=self.model.layer_conv3.conv1d,
                             init_weights=self.config.model_parameters["conv_init"],
                             layer_type="conv", nonlinearity="relu")
-        Conv1D_AddAtt_Net.init_weights(module=self.model.linear_in_att,
-                            init_weights=self.config.model_parameters["att_init_layer"],
-                            layer_type="att")
-        Conv1D_AddAtt_Net.init_weights(module=self.model.linear_att,
-                            init_weights=self.config.model_parameters["att_init_hid"],
-                            layer_type="att")
+        Conv1D_AddAtt_Net.init_weights(module=self.model.attention_layer.k_w,
+                            init_weights=self.config.model_parameters["att_init"],
+                            layer_type="att", nonlinearity="tanh")
+        Conv1D_AddAtt_Net.init_weights(module=self.model.attention_layer.q_w,
+                            init_weights=self.config.model_parameters["att_init"],
+                            layer_type="att", nonlinearity="tanh")
         Conv1D_AddAtt_Net.init_weights(module=self.model.linear_1.linear,
                             init_weights=self.config.model_parameters["fnn_init"],
                             layer_type="fnn", nonlinearity="leaky_relu")

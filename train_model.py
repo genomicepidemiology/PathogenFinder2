@@ -8,7 +8,7 @@ from tqdm import tqdm
 import os
 import numpy as np
 import sys
-from datetime import datetime
+import time
 from torchvision import transforms
 from torch.optim import swa_utils
 
@@ -64,13 +64,9 @@ class Train_NeuralNet():
             for p in self.network.parameters():
                 p.register_post_accumulate_grad_hook(Train_NeuralNet.optimizer_hook)
         else:
-            if optimizer.__class__.__name__ == "Adam" or optimizer.__class__.__name__ == "AdamW":
-                self.optimizer = optimizer(self.network.parameters(),
+            self.optimizer = optimizer(self.network.parameters(),
                                             lr=learning_rate, weight_decay=weight_decay,
                                             amsgrad=amsgrad)
-            elif optimizer.__class__.__name__ == "RAdam":
-                self.optimizer = optimizer(self.network.parameters(),
-                                            lr=learning_rate, weight_decay=weight_decay, decoupled_weight_decay=True)
         if lr_schedule:
             self.lr_scheduler = self.set_schedule_lr(optimizer=self.optimizer, end_lr=end_lr,
                                             scheduler_type=lr_schedule,
@@ -341,17 +337,12 @@ class Train_NeuralNet():
 
         for epoch in range(epochs):
             print(f'Epoch {epoch+1}/{epochs}') 
+            start_e_time = time.time()
             #  training
             loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping)
 
             #  validation
             print('validating...')
- #           if epoch >= epochs-1:
-   #         if False:
-  #              loss_val, mcc_v, att_results, profiler = self.val_pass(val_loader=val_loader, last_epoch=True)
- #               self.results_training.add_lastmodel_data(prot_names=att_results["Proteins"], genome_names=att_results["Genomes"],
-#								attentions=att_results["Attentions"])
- #           else:
             loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader)
 
             self.results_training.add_epoch_report(epoch=epoch, loss_t=loss_train, loss_v=loss_val, 
@@ -361,14 +352,14 @@ class Train_NeuralNet():
             elif stop_method == "best_epoch":
                 self.saved_model = self.best_epoch_retain(new_val=mcc_v, optimizer=self.optimizer, model=self.network, epoch=epoch, loss=loss_train)
             else:
-#                self.saved_model = {"epoch": epoch, 'model_state_dict': self.network.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict(),
- #                               'loss': loss_train, "val_measure": mcc_v}
                 pass
 
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
                 self.update_scheduler(value=loss_val)
-            print("training_loss: {}, validation_loss: {}".format(
-                loss_train, loss_val))
+            end_e_time = time.time()
+            self.results_training.time_log(end_e_time-start_e_time)
+            print("training_loss: {}, validation_loss: {}".format(loss_train, loss_val))
+            
         if self.profiler is not None:
             self.stop_memory_reports()
         return self.saved_model
