@@ -64,9 +64,13 @@ class Train_NeuralNet():
             for p in self.network.parameters():
                 p.register_post_accumulate_grad_hook(Train_NeuralNet.optimizer_hook)
         else:
-            self.optimizer = optimizer(self.network.parameters(),
+            if optimizer.__class__.__name__ == "Adam" or optimizer.__class__.__name__ == "AdamW":
+                self.optimizer = optimizer(self.network.parameters(),
                                             lr=learning_rate, weight_decay=weight_decay,
                                             amsgrad=amsgrad)
+            else:
+                self.optimizer = optimizer(self.network.parameters(),
+                                            lr=learning_rate, weight_decay=weight_decay, decoupled_weight_decay=True)
         if lr_schedule:
             self.lr_scheduler = self.set_schedule_lr(optimizer=self.optimizer, end_lr=end_lr,
                                             scheduler_type=lr_schedule,
@@ -316,7 +320,7 @@ class Train_NeuralNet():
         
 
     def train(self, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
-            lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False, stratified=stratified,
+            lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False, stratified=False,
             fused_OptBack=False, clipping=False, bucketing=False, warmup_period=False, stop_method="best_epoch"):
 
 
