@@ -11,6 +11,8 @@ import os
 import pandas as pd
 import numpy as np
 
+import time
+
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
@@ -125,7 +127,7 @@ class ProteomeDataset(Dataset):
         if self.load_data:
             embeddings, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
         else:
-            embeddings, length_proteome, protein_names = np.empty((2,2)), 0, None
+            embeddings, length_proteome, protein_names = np.empty((2,2)), self.landmarks_frame.iloc[idx]["Protein Count"], None
         pathophenotype = self.landmarks_frame.iloc[idx]["PathoPhenotype"]
         sample = {'Embeddings': embeddings, 'Label': pathophenotype, "Protein Count": length_proteome,
                   "Protein_IDs": protein_names, "File_Name": file_name}
@@ -200,43 +202,125 @@ class ProteomeDataset(Dataset):
 
 class BucketSampler(Sampler):
     
-    def __init__(self, landmarks_frame, batch_size, num_buckets=10, random_buckets=True):
+    def __init__(self, landmarks_frame, batch_size, num_buckets=10, random_buckets=True,
+                    stratified=True, drop_last=True):
+
         assert batch_size > num_buckets
         assert len(landmarks_frame) > batch_size*num_buckets
-        sort_df = landmarks_frame.sort_values(by=['Protein Count'])
-        lens_ind = np.array([sort_df.index.values, sort_df["Protein Count"].values], dtype=np.int32).T
-        len_df = len(sort_df)
-        batch_buck = math.ceil((len_df/batch_size)/num_buckets)
-        bucket_ind_l = []
-        bucket_batch_l = []
-        range_buckets = list(range(num_buckets))
-        for n in range(batch_buck):
-            range_buckets = list(range(num_buckets))
-            bucket_ind_l.append(np.repeat(range_buckets, batch_size))
-            bucket_batch_l.extend(range_buckets)
-        bucket_ind = np.sort(np.concatenate(bucket_ind_l, axis=None)[:len_df])
-        bucket_ind = np.expand_dims(bucket_ind, axis=1)
-        self.lens_ind = np.append(lens_ind, bucket_ind, axis=1)
-        self.batch_size = batch_size
-        self.amount_batches = math.ceil(len_df/batch_size)
-        self.bucket_batch = np.sort(np.array(bucket_batch_l)[:self.amount_batches])
-        if random_buckets:
-            random.shuffle(self.bucket_batch)
+        self.landmarks_frame = landmarks_frame.sort_values(by=['Protein Count'])
+        self.num_buckets = num_buckets
+        self.batch_size = int(batch_size)
+        if drop_last:
+            self.amount_batches = math.floor(len(landmarks_frame)/batch_size)
+        else:
+            self.amount_batches = math.ceil(len(landmarks_frame)/batch_size)
+        if not drop_last:
+            raise ValueError("The option for not dropping the last batch has not been implemented yet.")
+            self.batchable_data = len(self.landmarks_frame)
+        else:
+            self.batchable_data = len(self.landmarks_frame) - len(self.landmarks_frame)%self.batch_size
+            self.drop_last = drop_last
+        self.stratified = stratified
+
+    def get_bucket_vector(self, batch_size, len_vector, drop_last=True):
+        range_buckets = list(range(self.num_buckets))
+        random.shuffle(range_buckets)
+        bucket_nums = np.repeat(range_buckets, math.ceil(self.amount_batches/self.num_buckets))
+        random.shuffle(bucket_nums)
+        return np.sort(bucket_nums[:self.amount_batches])
+
+
+    def sort_packets(self, b, dict_pheno_count_old, dict_pheno_count, size_packet, index_info, column_packet, bucket_mask=None):
+        pheno_keys = list(dict_pheno_count.keys())
+        random.shuffle(pheno_keys)
+        total_count = sum(dict_pheno_count.values())
+        ceil_first = 0
+        for pheno_k in pheno_keys:
+            if ceil_first == 0:
+                num_v = math.ceil((self.batch_size*size_packet*dict_pheno_count[pheno_k])/total_count)
+                ceil_first = 1
+            else:
+                num_v = math.floor(((self.batch_size*size_packet*dict_pheno_count[pheno_k])/total_count))
+            prev_num_v = dict_pheno_count_old[pheno_k]
+            if bucket_mask is None:
+                mask = np.where((index_info[:,-1]==pheno_k))[0][prev_num_v:prev_num_v+num_v]
+            else:
+                mask = np.where((index_info[:,1]==bucket_mask)&(index_info[:,-1]==pheno_k))[0][prev_num_v:prev_num_v+num_v]
+            index_info[mask, column_packet] = b
+            dict_pheno_count_old[pheno_k] += num_v
+            dict_pheno_count[pheno_k] -= num_v
+        return dict_pheno_count_old, dict_pheno_count, index_info
+
+    def create_index_info(self):
+        # Delete few examples so dropping last batch
+        sel_ind = np.sort(np.random.choice(range(len(self.landmarks_frame)),
+                                            size=self.batchable_data,
+                                            replace=False))
+        subset_landmarks_frame = self.landmarks_frame.loc[sel_ind].sort_values(by=['Protein Count'])
+        batches = np.zeros(len(sel_ind), dtype=int)
+        if self.stratified:
+            vect_pheno = subset_landmarks_frame['PathoPhenotype'].rank(method='dense', ascending=False).astype(int).to_numpy()
+        else:
+            vect_pheno = np.ones(len(sel_ind), dtype=int)
+        ind_buck = np.vstack((subset_landmarks_frame.index.values, np.zeros(len(sel_ind), dtype=int), batches, vect_pheno)).T
+        return ind_buck
+            
+    
+    def get_batch_pheno(self, bucket_info):
+        a, b = np.unique(bucket_info[:,-1], return_counts=True)
+        pheno_count = {A: B for A, B in zip(a, b)}
+        return pheno_count
+
+    def get_batch_pheno_init(self, bucket_info):
+        dict_phenobatch = {}
+        for n in np.unique(bucket_info[:,-1]):
+            dict_phenobatch[n] = 0
+        return dict_phenobatch
 
     def __iter__(self):
-        selected_ind = []
-        for n in range(len(self.bucket_batch)):
-            bucket = self.bucket_batch[n]
-            bucket_ind = self.lens_ind[(self.lens_ind[:,2]==bucket) & (np.in1d(self.lens_ind[:,0], selected_ind, invert=True)),0]
-            if len(bucket_ind) >= self.batch_size:
-                batch_ind = np.random.choice(bucket_ind, size=self.batch_size, replace=False)
-            else:
-                batch_ind = bucket_ind
-            selected_ind.extend(batch_ind.tolist())
-            yield batch_ind           
+        index_info = self.create_index_info()
+        batch_count = 0
+        vector_buckets = self.get_bucket_vector(batch_size=self.batch_size, len_vector=len(index_info), drop_last=self.drop_last) 
+        phenobucket_count_init = self.get_batch_pheno_init(bucket_info=index_info)
+        phenobucket_count = self.get_batch_pheno(bucket_info=index_info)
+        for b in range(self.num_buckets):
+            phenobucket_count_init, phenobucket_count, index_info = self.sort_packets(b=b,
+                                dict_pheno_count_old=phenobucket_count_init, dict_pheno_count=phenobucket_count,
+                                size_packet=sum(vector_buckets==b), index_info=index_info, column_packet=1)
+        for b in range(self.num_buckets):
+            index_bucket = np.where([index_info[:,1]==b])[1]
+            bucket_info = index_info[index_bucket]
+
+            np.random.shuffle(index_bucket)
+            phenobatch_count_init = self.get_batch_pheno_init(index_info[index_bucket])
+            phenobatch_count = self.get_batch_pheno(index_info[index_bucket])
+            for n in range(len(index_bucket)//self.batch_size):
+                phenobatch_count_init, phenobatch_count, index_info = self.sort_packets(b=batch_count,
+                                dict_pheno_count_old=phenobatch_count_init, dict_pheno_count=phenobatch_count,
+                                size_packet=1, index_info=index_info, column_packet=2,
+                                bucket_mask=b)
+                batch_count += 1
+        list_batches = list(np.unique(index_info[:,2]))
+        random.shuffle(list_batches)
+        for b in list_batches:
+            yield index_info[index_info[:,2]==b,0].T
 
     def __len__(self):
         return self.amount_batches
+    
+    def get_buckets(self):
+        index_info = self.create_index_info()
+        vector_buckets = self.get_bucket_vector(batch_size=self.batch_size, len_vector=len(index_info), drop_last=self.drop_last) 
+        phenobucket_count_init = self.get_batch_pheno_init(bucket_info=index_info)
+        phenobucket_count = self.get_batch_pheno(bucket_info=index_info)
+        for b in range(self.num_buckets):
+            phenobucket_count_init, phenobucket_count, index_info = self.sort_packets(b=b,
+                                dict_pheno_count_old=phenobucket_count_init, dict_pheno_count=phenobucket_count,
+                                size_packet=sum(vector_buckets==b), index_info=index_info, column_packet=1)
+        for b in range(self.num_buckets):
+            ind_buck = index_info[index_info[:,1]==b,0]
+            yield self.landmarks_frame.loc[ind_buck]
+        
 
 class SimilaritySampler(Sampler):
 
@@ -258,15 +342,150 @@ class SimilarityBootstrap(Sampler):
 
 
 if __name__ == '__main__':
+    from collections import Counter
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    def calculate_intradistance(batch):
+        distances = []
+        range_prot = range(len(batch["Protein Count"]))
+        for n1 in range_prot:
+            for n2 in range_prot:
+                if n1 == n2:
+                    continue
+                distances.append(abs(int(batch["Protein Count"][n2].item())-int(batch["Protein Count"][n1].item())))
+        return np.mean(distances), np.std(distances), np.max(distances), torch.max(batch["Protein Count"]).item()
+        
+
+    def batch_graphs(weight_counts, title, filename):
+        species = list(range(len(weight_counts["Patho"])))
+        fig, ax = plt.subplots()
+        bottom = np.zeros(len(species))
+
+        for boolean, weight_count in weight_counts.items():
+            p = ax.bar(species, weight_count, label=boolean, bottom=bottom)
+            bottom += weight_count
+
+        ax.set_title("{}".format(title))
+        ax.legend(loc="lower right")
+        plt.ylabel("%")
+        plt.savefig("./{}.png".format(filename))
+        plt.close()
+
+    def boxplot_distances(distances_batch):
+        data = pd.DataFrame(distances_batch, columns=["Method", "Measure","Value"])
+        sns.boxplot(data=data, x="Method", y="Value", hue="Measure")
+        plt.savefig("./batchinner_distance.png")
+        plt.close()
+        #print(pd.DataFrame.from_dict(distances_batch[], orient='tight'))
+        #print(pd.DataFrame.from_dict(distances_batch, orient='columns'))
+
+
+
+    batch_size = 64
+    distances_batch_old = {"Bucketing":{"Max":[], "Mean":[], "Std":[]},
+                        "Bucketing & Stratified":{"Max":[], "Mean":[], "Std":[]},
+                        "Standard":{"Max":[], "Mean":[], "Std":[]}}
+    distances_batch = []
     dataset = ProteomeDataset(csv_file="../metadata/METADATA_completeDF_protLim.tsv",
 	                root_dir="/work3/alff/embeddings/data/",
 			transform=transforms.Compose([PhenotypeInteger(prediction="Single")]), load_data=False)
-    bucketing_sampler = BucketSampler(dataset.landmarks_frame, batch_size=64, num_buckets=6)
+    bucketing_sampler = BucketSampler(dataset.landmarks_frame, batch_size=batch_size, num_buckets=12, random_buckets=False,
+                                     stratified=True, drop_last=True)
+    weight_counts = {"Patho":[], "Non-patho":[]}
+    count = 0
+    for d in tqdm(bucketing_sampler.get_buckets()):
+        counts = dict(Counter(d["PathoPhenotype"].squeeze().tolist()))
+        weight_counts["Patho"].append(counts["Pathogenic"])
+        try:
+            weight_counts["Non-patho"].append(counts["No Pathogenic"])
+        except KeyError:
+            weight_counts["Non-patho"].append(0.)
+    batch_graphs(weight_counts, title="Percentatge phenotype per bucket (stratified)", filename="bucket_stratified")
+    load_data = DataLoader(dataset,num_workers=1,
+				collate_fn=ProteomeDataset.collate_fn_mask,
+                                batch_sampler=bucketing_sampler, persistent_workers=False, pin_memory=False)
+
+    weight_counts = {"Patho":[], "Non-patho":[]}
+    count = 0
+    for d in tqdm(load_data):
+        counts = dict(Counter(d["PathoPhenotype"].squeeze().tolist()))
+        weight_counts["Patho"].append(100*(counts[1.0]/batch_size))
+        try:
+            weight_counts["Non-patho"].append(100*(counts[0.0]/batch_size))
+        except KeyError:
+            weight_counts["Non-patho"].append(0.)
+        mean_, std_, max_, b_size = calculate_intradistance(batch=d)
+        distances_batch.append(["Bucketing & Stratified","Mean",mean_])
+        distances_batch.append(["Bucketing & Stratified","Std",std_])
+        distances_batch.append(["Bucketing & Stratified","Max",max_])
+        distances_batch.append(["Bucketing & Stratified","Batch Size",b_size])
+
+
+    batch_graphs(weight_counts, title="Percentatge phenotype per batch (stratified)", filename="batch_stratified")
+    batch_size = 64
+    dataset = ProteomeDataset(csv_file="../metadata/METADATA_completeDF_protLim.tsv",
+	                root_dir="/work3/alff/embeddings/data/",
+			transform=transforms.Compose([PhenotypeInteger(prediction="Single")]), load_data=False)
+    bucketing_sampler = BucketSampler(dataset.landmarks_frame, batch_size=batch_size, num_buckets=12, random_buckets=False,
+                                     stratified=False)
+    weight_counts = {"Patho":[], "Non-patho":[]}
+    count = 0
+    for d in tqdm(bucketing_sampler.get_buckets()):
+        counts = dict(Counter(d["PathoPhenotype"].squeeze().tolist()))
+        try:
+            weight_counts["Patho"].append(counts["Pathogenic"])
+        except KeyError:
+            weight_counts["Patho"].append(1.)        
+        try:
+            weight_counts["Non-patho"].append(counts["No Pathogenic"])
+        except KeyError:
+            weight_counts["Non-patho"].append(0.)
+    batch_graphs(weight_counts, title="Percentatge phenotype per bucket (no stratified)", filename="bucket_nostratified")
 
     load_data = DataLoader(dataset,num_workers=1,
 				collate_fn=ProteomeDataset.collate_fn_mask,
                                 batch_sampler=bucketing_sampler, persistent_workers=False, pin_memory=False)
+
+    weight_counts = {"Patho":[], "Non-patho":[]}
     count = 0
     for d in tqdm(load_data):
-        print(d["PathoPhenotype"])
+        counts = dict(Counter(d["PathoPhenotype"].squeeze().tolist()))
+        try:
+            weight_counts["Patho"].append(100*(counts[1.0]/batch_size))
+        except KeyError:
+            weight_counts["Non-patho"].append(1.)
+        try:
+            weight_counts["Non-patho"].append(100*(counts[0.0]/batch_size))
+        except KeyError:
+            weight_counts["Non-patho"].append(0.)
+        mean_, std_, max_, b_size = calculate_intradistance(batch=d)
+        distances_batch.append(["Bucketing","Mean",mean_])
+        distances_batch.append(["Bucketing","Std",std_])
+        distances_batch.append(["Bucketing","Max",max_])
+        distances_batch.append(["Bucketing","Batch Size",b_size])
+
+    batch_graphs(weight_counts, title="Percentatge phenotype per batch (no stratified)", filename="batch_nostratified")
+
+    load_data = DataLoader(dataset,num_workers=1, batch_size=batch_size,
+				collate_fn=ProteomeDataset.collate_fn_mask, persistent_workers=False, pin_memory=False, drop_last=True)
+    weight_counts = {"Patho":[], "Non-patho":[]}
+    count = 0
+    for d in tqdm(load_data):
+        counts = dict(Counter(d["PathoPhenotype"].squeeze().tolist()))
+        try:
+            weight_counts["Patho"].append(100*(counts[1.0]/batch_size))
+        except KeyError:
+            weight_counts["Non-patho"].append(1.)
+        try:
+            weight_counts["Non-patho"].append(100*(counts[0.0]/batch_size))
+        except KeyError:
+            weight_counts["Non-patho"].append(0.)
+        mean_, std_, max_, b_size = calculate_intradistance(batch=d)
+        distances_batch.append(["Standard","Mean",mean_])
+        distances_batch.append(["Standard","Std",std_])
+        distances_batch.append(["Standard","Max",max_])
+        distances_batch.append(["Standard","Batch Size",b_size])
+
+    boxplot_distances(distances_batch)
     

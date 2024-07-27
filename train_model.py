@@ -147,16 +147,16 @@ class Train_NeuralNet():
                                 data_type))
 
     def load_data(self, data_set, batch_size, num_workers=4, shuffle=True, pin_memory=False,
-                  bucketing=None):
+                  bucketing=None, stratified=False):
         if bucketing:
             bucketing_sampler = BucketSampler(data_set.landmarks_frame, batch_size=batch_size,
-                                              num_buckets=bucketing)
+                                              num_buckets=bucketing, stratified=stratified, drop_last=True)
             data_loader = DataLoader(data_set, num_workers=num_workers,
                               collate_fn=ProteomeDataset.collate_fn_mask, batch_sampler=bucketing_sampler,
                               persistent_workers=False, pin_memory=pin_memory)
         else:
             data_loader = DataLoader(data_set, batch_size=batch_size, num_workers=num_workers,
-                              collate_fn=ProteomeDataset.collate_fn_mask,
+                              collate_fn=ProteomeDataset.collate_fn_mask, drop_last=True,
                               shuffle=shuffle, persistent_workers=False, pin_memory=pin_memory)
 
         return data_loader
@@ -316,7 +316,7 @@ class Train_NeuralNet():
         
 
     def train(self, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
-            lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False,
+            lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False, stratified=stratified,
             fused_OptBack=False, clipping=False, bucketing=False, warmup_period=False, stop_method="best_epoch"):
 
 
@@ -326,7 +326,7 @@ class Train_NeuralNet():
 
         #  creating dataloaders
         train_loader = self.load_data(self.train_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing)
+                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
         val_loader = self.load_data(self.val_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing)
 

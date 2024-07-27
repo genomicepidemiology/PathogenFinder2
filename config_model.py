@@ -95,7 +95,7 @@ class ConfigModel:
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
                     "train_results", "memory_report", "results_dir", "compiler", "normalize",
-                    "bucketing", "warm_up", "swa", "ema", "wandb_report"])
+                    "bucketing", "stratified", "warm_up", "swa", "ema", "wandb_report"])
         return train_parameters
 
     def init_pred_parameters(self):
@@ -169,6 +169,7 @@ class ConfigModel:
         self.train_parameters.set_param(param="compiler", value=args.memory_report, type_d=str)
         self.train_parameters.set_param(param="normalize", value=args.normalize, type_d=str)
         self.train_parameters.set_param(param="bucketing", value=args.bucketing_sample, type_d=int)
+        self.train_parameters.set_param(param="stratified", value=args.stratified, type_d=bool)
         self.train_parameters.set_param(param="warm_up", value=args.warm_up, type_d=int)
         self.train_parameters.set_param(param="swa", value=args.swa, type_d=bool)
         self.train_parameters.set_param(param="ema", value=args.ema, type_d=bool)
@@ -254,6 +255,7 @@ class ConfigModel:
         parser_train.add_argument("-d_s", "--data_sample", help="sample data", action="store_true")
         parser_train.add_argument("-p", "--prot_dim_split", help="sample data", action="store_true")
         parser_train.add_argument("-b_s", "--bucketing_sample", help="bucketing length", type=int, default=None)
+        parser_train.add_argument("-s_s", "--stratified_sample", help="stratified batch", type=bool)
         parser_train.add_argument("-tr_d", "--train_df", help="train_df")
         parser_train.add_argument("-tr_l", "--train_loc", help="train_loc")
         parser_train.add_argument("-val_d", "--val_df", help="val_df")

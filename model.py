@@ -196,6 +196,7 @@ class Compile_Model:
                             asynchronity=self.config.train_parameters["asynchronity"],
                             clipping=self.config.train_parameters["clipping"],
                             bucketing=self.config.train_parameters["bucketing"],
+                            stratified=self.config.train_parameters["stratified"],
                             warmup_period=self.config.train_parameters["warm_up"])
      
 
