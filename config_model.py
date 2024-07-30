@@ -24,6 +24,7 @@ class ParamsModel(UserDict):
     function_param = {
             "Adam": torch.optim.Adam,
             "AdamW": torch.optim.AdamW,
+            "NAdam": torch.optim.NAdam,
             "BCELoss": nn.BCELoss,
             "BCEWithLogitsLoss": nn.BCEWithLogitsLoss,
             "xavier_init": nn.init.xavier_normal_,
@@ -58,7 +59,7 @@ class ParamsModel(UserDict):
 
 class ConfigModel:
 
-    def __init__(self, model_type="additive"):
+    def __init__(self, model_type):
 
         self.model_type = model_type
         
@@ -78,12 +79,9 @@ class ConfigModel:
     def init_model_parameters(self):
         model_parameters = ParamsModel(name_params="Model Parameters")
         model_parameters.init_params(
-                list_params=["batch_size", "attention_type", "in_dropout", "n_conv_l", "kernels",
-                    "in_conv_dim", "conv_dropout", "conv_act", "conv_init",
-                    "att_in_dim", "att_init", "att_dropout", "fnn_layers", "fnn_dim",
-                    "fnn_act", "fnn_init", "fnn_dropout", "out_dim", "out_init", "out_sigmoid",
-                    "batch_norm", "layer_norm", "train_status", "saved_model",
-                    "mode"])
+                list_params=["batch_size", "model_name", "model_structure",  "out_dim", "out_init",
+                    "out_sigmoid", "batch_norm", "layer_norm", "train_status", "saved_model", 
+                    "mode", "input_dim"])
         return model_parameters
 
     def init_train_parameters(self):
@@ -111,37 +109,17 @@ class ConfigModel:
         return test_parameters
 
     def standard_init_model(self):
-
-        self.model_parameters.set_param(param="conv_act", value="ReLU", type_d="function")
-        self.model_parameters.set_param(param="conv_init", value="kaiming_init", type_d="function")
-        self.model_parameters.set_param(param="attention_type", value=self.model_type, type_d=str)
-        self.model_parameters.set_param(param="att_init", value="xavier_init", type_d="function")
- #       self.model_parameters.set_param(param="att_act", value="Tanh", type_d="function")
-#        self.model_parameters.set_param(param="att_init_layer", value="xavier_init", type_d="function")
-        self.model_parameters.set_param(param="fnn_act", value="LeakyReLU", type_d="function")
-        self.model_parameters.set_param(param="fnn_init", value="kaiming_init", type_d="function")
-        self.model_parameters.set_param(param="out_init", value="xavier_init", type_d="function")
         self.model_parameters.set_param(param="saved_model", value=False, type_d=bool)
 
     def standard_init_train(self):
-#        self.train_parameters.set_param(param="loss_function", value="BCELoss", type_d="function")
- #       self.train_parameters.set_param(param="optimizer", value="Adam", type_d="function")
         pass
     
     def load_model_params(self, args):
         self.model_parameters.set_param(param="batch_size", value=args.batch_size, type_d=int)
-        self.model_parameters.set_param(param="n_conv_l", value=args.conv_layers, type_d=int)
-        self.model_parameters.set_param(param="kernels", value=args.kernels, type_d=list)
-        self.model_parameters.set_param(param="in_conv_dim", value=args.conv_dim, type_d=list)
-        self.model_parameters.set_param(param="conv_dropout", value=args.conv_dropout, type_d=float)
-        self.model_parameters.set_param(param="att_in_dim", value=args.attention_dim_in, type_d=int)
- #       self.model_parameters.set_param(param="att_size", value=args.attention_size, type_d=int)
-        self.model_parameters.set_param(param="att_dropout", value=args.attention_dropout, type_d=float)
-        self.model_parameters.set_param(param="fnn_layers", value=args.fnn_layers, type_d=int)
-        self.model_parameters.set_param(param="fnn_dim", value=args.fnn_hidden, type_d=int)
-        self.model_parameters.set_param(param="fnn_dropout", value=args.fnn_dropout, type_d=float)
+        self.model_parameters.set_param(param="model_name", value=args.model_name, type_d=str)
+        self.model_parameters.set_param(param="model_structure", value=args.model_structure, type_d=dict)
         self.model_parameters.set_param(param="out_dim", value=args.out_dim, type_d=int)
-        self.model_parameters.set_param(param="in_dropout", value=args.in_dropout, type_d=float)
+        self.model_parameters.set_param(param="input_dim", value=args.input_dim, type_d=int)
         self.model_parameters.set_param(param="batch_norm", value=args.batch_norm, type_d=bool)
         self.model_parameters.set_param(param="layer_norm", value=args.layer_norm, type_d=bool)
     
@@ -216,32 +194,13 @@ class ConfigModel:
         parser_model = parser.add_argument_group('Model Parameters')
         parser_model.add_argument("-m", "--model_type", help="model type",
                                 default="additive")
-        parser_model.add_argument("-c_l", "--conv_layers",
-                            help="amount convolutional", default=3)
-        parser_model.add_argument("-k", "--kernels", help="kernel values",
-                            default=[5,3,3],
-                            type=lambda s: [int(item) for item in s.split(',')])
-        parser_model.add_argument("-c_i", "--conv_dim", help="in_dim_conv",
-                            type=lambda s: [int(item) for item in s.split(',')])
-        parser_model.add_argument("-c_d", "--conv_dropout",
-                            help="convolutional dropout")
-        parser_model.add_argument("-a_i", "--attention_dim_in",
-                                help="attention input dimension")
-        parser_model.add_argument("-a_s", "--attention_size",
-                                help="attention size")
-        parser_model.add_argument("-a_d", "--attention_dropout",
-                                help="attention dropout")
-        parser_model.add_argument("-f_l", "--fnn_layers", help="amount fnn",
-                                    default=1)
-        parser_model.add_argument("-f_h", "--fnn_hidden", help="fnn hidden nodes")
-        parser_model.add_argument("-f_d", "--fnn_dropout", help="fnn dropout")
         parser_model.add_argument("-o_dim", "--out_dim", help="out dimension",
                             default=1)
         parser_model.add_argument("-b_n", "--batch_norm", help="batch norm",
                             action="store_true")
         parser_model.add_argument("-l_n", "--layer_norm", help="layer norm",
                             action="store_true")
-        parser_model.add_argument("-i_d", "--in_dropout", help="input dropout",
+        parser_model.add_argument("-i_d", "--input_dim", help="input dimension",
                             )
         parser_model.add_argument("-b", "--batch_size", help="batch_size", type=int
                             )

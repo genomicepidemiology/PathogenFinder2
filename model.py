@@ -16,7 +16,9 @@ from datetime import datetime
 
 sys.dont_write_bytecode = True
 
-from conv1d_addatt_STD import Conv1D_AddAtt_Net
+from models.fnn_STD import FNN_Net
+from models.conv1d_addatt_STD import Conv1D_AddAtt_Net
+from models.conv1d_STD import Conv1D_Net
 from config_model import ConfigModel, ParamsModel
 from train_model import Train_NeuralNet
 from prediction import Prediction_NeuralNet
@@ -32,13 +34,15 @@ class Compile_Model:
     def __init__(self, model_arguments):
 
         self.config = ConfigModel(model_type=model_arguments.model_type)
-        self.model_carcass = self.get_model_carcass(model_type=model_arguments.model_type)
 
         if model_arguments.json_INdata:
             self.load_json(json_file=model_arguments.json_INdata)
         else:
             self.load_model_params(args=model_arguments)
             self.load_train_params(args=model_arguments)
+
+        self.model_name = self.config.model_parameters["model_name"]
+        self.model_carcass = self.get_model_carcass(model_type=self.model_name)
 
         self.set_model()
 
@@ -47,47 +51,55 @@ class Compile_Model:
 
 
     def get_model_carcass(self, model_type):
-        if model_type == "additive":
+        if model_type == "conv1d_additiveatt":
             return Conv1D_AddAtt_Net
+        elif model_type == "conv1d":
+            return Conv1D_Net
+        elif model_type == "fnn":
+            return FNN_Net
         else:
             raise ValueError("Only additive is allowed at the moment")
 
     def set_model(self):
-        self.model = self.model_carcass(
-                        conv_in_features=self.config.model_parameters["in_conv_dim"],
+        if self.model_name == "conv1d_additiveatt":
+            self.set_model_conv1d_additiveatt()
+        elif self.model_name == "conv1d":
+            self.set_model_conv1d()
+        elif self.model_name == "fnn":
+            self.set_model_fnn()
+        else:
+            raise KeyError("The model {} is not settled".format(self.model_name))
+
+    def set_model_fnn(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
                         num_of_class=self.config.model_parameters["out_dim"],
-                        kernel_sizes=self.config.model_parameters["kernels"], stride=1,
-                        conv_out_dim=self.config.model_parameters["att_in_dim"],
-                        nodes_fnn=self.config.model_parameters["fnn_dim"],
-                        dropout_conv=self.config.model_parameters["conv_dropout"],
- #                       att_size=self.config.model_parameters["att_size"],
-                        dropout_fnn=self.config.model_parameters["fnn_dropout"],
-                        dropout_att=self.config.model_parameters["att_dropout"],
-                        dropout_in=self.config.model_parameters["in_dropout"],
+                        nodes_fnn=self.config.model_parameters["model_structure"]["fnn_dim"],
+                        dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"])
+
+    def set_model_conv1d(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
+                        conv_channels=self.config.model_parameters["model_structure"]["conv_channels"],
+                        num_of_class=self.config.model_parameters["out_dim"],
+                        kernel_sizes=self.config.model_parameters["model_structure"]["kernels"], stride=1,
+                        dropout_conv=self.config.model_parameters["model_structure"]["conv_dropout"],
+                        dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
                         batch_norm=self.config.model_parameters["batch_norm"],
-                        layer_norm=self.config.model_parameters["layer_norm"],
-                        act_fnn=self.config.model_parameters["fnn_act"],
-                        act_conv=self.config.model_parameters["conv_act"])
+                        layer_norm=self.config.model_parameters["layer_norm"])        
+
+    def set_model_conv1d_additiveatt(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
+                        conv_channels=self.config.model_parameters["model_structure"]["conv_channels"],
+                        num_of_class=self.config.model_parameters["out_dim"],
+                        kernel_sizes=self.config.model_parameters["model_structure"]["kernels"], stride=1,
+                        nodes_fnn=self.config.model_parameters["model_structure"]["fnn_dim"],
+                        dropout_conv=self.config.model_parameters["model_structure"]["conv_dropout"],
+                        dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
+                        dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
+                        dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
+                        batch_norm=self.config.model_parameters["batch_norm"],
+                        layer_norm=self.config.model_parameters["layer_norm"])
 
 
-        Conv1D_AddAtt_Net.init_weights(module=self.model.layer_conv1.conv1d,
-                            init_weights=self.config.model_parameters["conv_init"],
-                            layer_type="conv", nonlinearity="relu")
-        Conv1D_AddAtt_Net.init_weights(module=self.model.layer_conv2.conv1d,
-                            init_weights=self.config.model_parameters["conv_init"],
-                            layer_type="conv", nonlinearity="relu")
-        Conv1D_AddAtt_Net.init_weights(module=self.model.layer_conv3.conv1d,
-                            init_weights=self.config.model_parameters["conv_init"],
-                            layer_type="conv", nonlinearity="relu")
-        Conv1D_AddAtt_Net.init_weights(module=self.model.attention_layer.k_w,
-                            init_weights=self.config.model_parameters["att_init"],
-                            layer_type="att", nonlinearity="tanh")
-        Conv1D_AddAtt_Net.init_weights(module=self.model.attention_layer.q_w,
-                            init_weights=self.config.model_parameters["att_init"],
-                            layer_type="att", nonlinearity="tanh")
-        Conv1D_AddAtt_Net.init_weights(module=self.model.linear_1.linear,
-                            init_weights=self.config.model_parameters["fnn_init"],
-                            layer_type="fnn", nonlinearity="leaky_relu")
 
     def load_model_params(self, args):
         self.config.standard_init_model()

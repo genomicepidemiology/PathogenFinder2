@@ -4,14 +4,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
-from tqdm import tqdm
-import h5py
-import argparse
-import pickle
-import gc
-import os
-import pandas as pd
-import numpy as np
 from collections import OrderedDict
 
 class Attention_Methods(nn.Module):
@@ -30,7 +22,16 @@ class Attention_Methods(nn.Module):
         else:
             self.score_proj = None
 
-        self.attention_pass = self._get_pass()       
+        self.attention_pass = self._get_pass() 
+
+        self.init_weights()      
+
+    def init_weights(self):
+        torch.nn.init.xavier_normal_(self.q_w.weight)
+        self.q_w.bias.data.fill_(0.01)
+
+        torch.nn.init.xavier_normal_(self.k_w.weight)
+        self.k_w.bias.data.fill_(0.01)
 
     def _get_pass(self):
         if self.attention_type == "Bahdanau":
@@ -65,16 +66,15 @@ class Attention_Methods(nn.Module):
 
 class Conv1D_AddAtt_Net(nn.Module):
 
-    def __init__(self, conv_in_features=[1024, 1024*4, 1024*2], num_of_class=1,
-                 kernel_sizes=[5,3,3], stride=1, conv_out_dim=100, nodes_fnn=50,
+    def __init__(self, input_dim=1024, conv_channels=[1024*4, 1024*2,100], num_of_class=1,
+                 kernel_sizes=[5,3,3], stride=1, nodes_fnn=50,
                  dropout_conv=0.2, dropout_fnn=0.3, dropout_att=0.3,
-                 dropout_in=0.4, batch_norm=False, layer_norm=False, attention_type="Bahdanau",
-                 act_conv=nn.ReLU(), act_fnn=nn.LeakyReLU()):
+                 dropout_in=0.4, batch_norm=False, layer_norm=False, attention_type="Bahdanau"):
         super(Conv1D_AddAtt_Net, self).__init__()
 
         if batch_norm:
             self.in_layer = nn.Sequential(OrderedDict([
-                ("batchnorm", nn.BatchNorm2d(conv_in_features[0])),
+                ("batchnorm", nn.BatchNorm2d(input_dim)),
                 ("drop_in", nn.Dropout1d(dropout_in))
             ]))
         else:
@@ -83,38 +83,59 @@ class Conv1D_AddAtt_Net(nn.Module):
             ]))
 
         self.layer_conv1 = nn.Sequential(OrderedDict([
-            ("conv1d", nn.Conv1d(conv_in_features[0], conv_in_features[1],
+            ("conv1d", nn.Conv1d(input_dim, conv_channels[0],
                         kernel_size=kernel_sizes[0],
                         stride=1, padding=kernel_sizes[0]//2)),
             ("activation", nn.ReLU()),
             ("dropout", nn.Dropout1d(dropout_conv))]))
 
         self.layer_conv2 = nn.Sequential(OrderedDict([
-            ("conv1d", nn.Conv1d(conv_in_features[1], conv_in_features[2],
+            ("conv1d", nn.Conv1d(conv_channels[0], conv_channels[1],
                                     kernel_size=kernel_sizes[1],
                                     stride=1, padding=kernel_sizes[1]//2)),
             ("activation", nn.ReLU()),
             ("dropout", nn.Dropout1d(dropout_conv))]))
 
         self.layer_conv3 = nn.Sequential(OrderedDict([
-            ("conv1d", nn.Conv1d(conv_in_features[2], conv_out_dim,
+            ("conv1d", nn.Conv1d(conv_channels[1], conv_channels[2],
                                     kernel_size=kernel_sizes[2],
                                     stride=1, padding=kernel_sizes[2]//2)),
             ("activation", nn.ReLU()),
             ("dropout", nn.Dropout1d(dropout_conv))]))
 
         self.attention_layer = Attention_Methods(attention_type=attention_type,
-							dimensions_in=conv_out_dim,
+							dimensions_in=conv_channels[2],
                                                         dropout=dropout_att)
         self.linear_1 = nn.Sequential(OrderedDict([
-            ("linear", nn.Linear(conv_out_dim, nodes_fnn)),
+            ("linear", nn.Linear(conv_channels[2], nodes_fnn)),
             ("activation", nn.LeakyReLU()),
             ("dropout", nn.Dropout(dropout_fnn))]))
 
         self.linear_out = nn.Linear(nodes_fnn, num_of_class)
 
+        self.init_weights()
+
+    def init_weights(self):
+
+        torch.nn.init.kaiming_normal_(self.layer_conv1[0].weight, mode='fan_in', nonlinearity='relu')
+        self.layer_conv1[0].bias.data.fill_(0.01)
+
+        torch.nn.init.kaiming_normal_(self.layer_conv2[0].weight, mode='fan_in', nonlinearity='relu')
+        self.layer_conv2[0].bias.data.fill_(0.01)
+
+        torch.nn.init.kaiming_normal_(self.layer_conv3[0].weight, mode='fan_in', nonlinearity='relu')
+        self.layer_conv3[0].bias.data.fill_(0.01)
+
+        torch.nn.init.kaiming_normal_(self.linear_1[0].weight, mode='fan_in', nonlinearity='leaky_relu')
+        self.linear_1[0].bias.data.fill_(0.01)
+
+        torch.nn.init.xavier_normal_(self.linear_out.weight)
+        self.linear_out.bias.data.fill_(0.01)
+
+        
+
     @staticmethod
-    def init_weights(module, init_weights, layer_type, nonlinearity=None):
+    def init_weights_old(module, init_weights, layer_type, nonlinearity=None):
         if layer_type == "conv":
             init_weights(module.weight, mode='fan_in', nonlinearity=nonlinearity)
         elif layer_type == "att":
