@@ -42,22 +42,25 @@ class Attention_Methods(nn.Module):
     def bahdanau_pass(self, query, key):
         return self.score_proj(torch.tanh(query + key))
 
-    def create_mask(self, seq_lengths, dimensions_batch):
+    @staticmethod
+    def create_mask(seq_lengths, dimensions_batch):
         mask = torch.arange(dimensions_batch[1], device=seq_lengths.device)[None, :] > seq_lengths[:, None]
         return mask
 
-    def forward(self, x_in, seq_lengths):
+    def forward(self, x_in, mask):
+#        mask = Attention_Methods.create_mask(seq_lengths=seq_lengths, dimensions_batch=x_in.shape)
+
         query = self.q_w(x_in)
         key = self.k_w(x_in)
-
+       
         weights = self.attention_pass(query=query, key=key)
         weights = self.dropout(weights)
         weights = weights.squeeze(2).unsqueeze(1)
 
-        mask = self.create_mask(seq_lengths=seq_lengths, dimensions_batch=x_in.shape)
         weights.masked_fill_(mask, -float("inf"))
 
         att = torch.nn.functional.softmax(weights, dim=-1)
+
         attention_result = torch.bmm(att, x_in).squeeze(1)
 
         return attention_result, att
@@ -102,7 +105,7 @@ class Conv1D_AddAtt_Net(nn.Module):
                                     stride=1, padding=kernel_sizes[2]//2)),
             ("activation", nn.ReLU()),
             ("dropout", nn.Dropout1d(dropout_conv))]))
-
+        
         self.attention_layer = Attention_Methods(attention_type=attention_type,
 							dimensions_in=conv_channels[2],
                                                         dropout=dropout_att)
@@ -131,8 +134,6 @@ class Conv1D_AddAtt_Net(nn.Module):
 
         torch.nn.init.xavier_normal_(self.linear_out.weight)
         self.linear_out.bias.data.fill_(0.01)
-
-        
 
     @staticmethod
     def init_weights_old(module, init_weights, layer_type, nonlinearity=None):
@@ -186,16 +187,26 @@ class Conv1D_AddAtt_Net(nn.Module):
         att = F.softmax(att, dim=-1) # (B, nh, T, T)
         return torch.sum(x_in * att, dim=1), att
 
+
     def forward(self, x, seq_lengths):
         x = self.in_layer(x)
+        mask = Attention_Methods.create_mask(seq_lengths=seq_lengths, dimensions_batch=x.shape)
+
         x = x.permute(0, 2, 1)
+
         ## Convolutional ##
         x = self.layer_conv1(x)
+        x = x.masked_fill_(mask, 0)
+
         x = self.layer_conv2(x)
+        x = x.masked_fill_(mask, 0)
+
         x = self.layer_conv3(x)
+        x = x.masked_fill_(mask, 0)
+
         x = x.permute(0, 2, 1)
         ## Additive Attention ##
-        x, attentions = self.attention_layer(x, seq_lengths)
+        x, attentions = self.attention_layer(x, mask)
         ## FNN ##
         x = self.linear_1(x)
         x = self.linear_out(x)

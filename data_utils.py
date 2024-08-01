@@ -205,7 +205,6 @@ class BucketSampler(Sampler):
     def __init__(self, landmarks_frame, batch_size, num_buckets=10, random_buckets=True,
                     stratified=True, drop_last=True):
 
-        assert batch_size > num_buckets
         assert len(landmarks_frame) > batch_size*num_buckets
         self.landmarks_frame = landmarks_frame.sort_values(by=['Protein Count'])
         self.num_buckets = num_buckets

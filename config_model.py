@@ -27,12 +27,6 @@ class ParamsModel(UserDict):
             "NAdam": torch.optim.NAdam,
             "BCELoss": nn.BCELoss,
             "BCEWithLogitsLoss": nn.BCEWithLogitsLoss,
-            "xavier_init": nn.init.xavier_normal_,
-            "kaiming_init": nn.init.kaiming_normal_,
-            "Tanh": nn.Tanh(),
-            "Sigmoid": nn.Sigmoid(),
-            "LeakyReLU": nn.LeakyReLU(),
-            "ReLU": nn.ReLU()
             }
 
     def __init__(self, name_params):
