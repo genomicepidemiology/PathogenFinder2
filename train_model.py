@@ -212,6 +212,7 @@ class Train_NeuralNet():
             #  sending data to device
             embeddings = embeddings.to(self.device, non_blocking=asynchronity)
             labels = labels.to(self.device, non_blocking=asynchronity)
+            print(labels.unique(return_counts=True))
             lengths = lengths.to(self.device, non_blocking=asynchronity)
             #  resetting gradients
             self.optimizer.zero_grad(set_to_none=True)
@@ -343,11 +344,11 @@ class Train_NeuralNet():
             print(f'Epoch {epoch+1}/{epochs}') 
             start_e_time = time.time()
             #  training
-            loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping)
+            loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping, asynchronity=asynchronity)
 
             #  validation
             print('validating...')
-            loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader)
+            loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader, asynchronity=asynchronity)
 
             self.results_training.add_epoch_report(epoch=epoch, loss_t=loss_train, loss_v=loss_val, 
                                                    lr=lr_rate, mcc_t=mcc_t, mcc_v=mcc_v)

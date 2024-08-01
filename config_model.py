@@ -27,6 +27,12 @@ class ParamsModel(UserDict):
             "NAdam": torch.optim.NAdam,
             "BCELoss": nn.BCELoss,
             "BCEWithLogitsLoss": nn.BCEWithLogitsLoss,
+            "xavier_init": nn.init.xavier_normal_,
+            "kaiming_init": nn.init.kaiming_normal_,
+            "Tanh": nn.Tanh(),
+            "Sigmoid": nn.Sigmoid(),
+            "LeakyReLU": nn.LeakyReLU(),
+            "ReLU": nn.ReLU()
             }
 
     def __init__(self, name_params):
@@ -83,7 +89,7 @@ class ConfigModel:
         train_parameters.init_params(
                 list_params=["optimizer", "learning_rate",
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
-                    "weight_decay", "lr_end", "fused_OptBack", "clipping",
+                    "weight_decay", "lr_end", "fused_OptBack", "clipping", "num_workers",
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
                     "train_results", "memory_report", "results_dir", "compiler", "normalize",

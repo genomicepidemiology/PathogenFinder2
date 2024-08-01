@@ -204,7 +204,7 @@ class Compile_Model:
                             weight_decay=self.config.train_parameters["weight_decay"],
                             lr_schedule=self.config.train_parameters["lr_scheduler"],
                             end_lr=self.config.train_parameters["lr_end"],
-                            amsgrad=False, num_workers=2,
+                            amsgrad=False, num_workers=self.config.train_parameters["num_workers"],
                             asynchronity=self.config.train_parameters["asynchronity"],
                             clipping=self.config.train_parameters["clipping"],
                             bucketing=self.config.train_parameters["bucketing"],
