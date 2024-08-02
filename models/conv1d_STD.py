@@ -3,8 +3,8 @@ import math
 from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
 from collections import OrderedDict
+from .conv1d_addatt_STD import Attention_Methods
 
 class Conv1D_Net(nn.Module):
 
@@ -30,7 +30,6 @@ class Conv1D_Net(nn.Module):
             ("activation", nn.ReLU()),
             ("dropout", nn.Dropout1d(dropout_conv))]))
 
-        self.layer_pool = nn.AdaptiveAvgPool1d(1)
 
         self.linear_out = nn.Linear(conv_channels[0], num_of_class)
 
@@ -52,6 +51,11 @@ class Conv1D_Net(nn.Module):
         alpha = F.softmax(att_score + mask, dim=1) # [bs, seq_len]
         att = alpha.unsqueeze(2) # [bs, seq_len, 1]
         return torch.sum(x_in * att, dim=1), alpha # [bs, in_size]
+
+    def masked_AvgPool(self, x, seq_lengths):
+        x = torch.sum(x, 2)
+        x = torch.divide(x, seq_lengths)
+        return x
 
     @staticmethod
     def length_to_negative_mask(length, max_len=None, dtype=None):
@@ -84,11 +88,14 @@ class Conv1D_Net(nn.Module):
 
     def forward(self, x, seq_lengths):
         x = self.in_layer(x)
+        mask = Attention_Methods.create_mask(seq_lengths=seq_lengths, dimensions_batch=x.shape)
+
         x = x.permute(0, 2, 1)
         ## Convolutional ##
         x = self.layer_conv1(x)
-        x = self.layer_pool(x)
-        x = x.permute(0, 2, 1)
+        x = x.masked_fill_(mask, 0)
+
+        x = self.masked_AvgPool(x, seq_lengths)
         x = torch.squeeze(x, 1)
         x = self.linear_out(x)
         return x, None
