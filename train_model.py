@@ -114,7 +114,8 @@ class Train_NeuralNet():
 
 
     def create_dataset(self, data_df, data_loc, data_type="train", dual_pred=False, cluster_sample=False,
-                        cluster_tsv=None, weighted=False, normalize=False, fraction_embeddings=False):
+                        cluster_tsv=None, weighted=False, normalize=False, fraction_embeddings=False,
+                        limit_length=False):
         transform_data = []
 
         if normalize:
@@ -135,16 +136,16 @@ class Train_NeuralNet():
         transform_compose = transforms.Compose(transform_data)
 
         if data_type == "validation":
-            dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc, transform=transform_compose)
+            dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc, transform=transform_compose, limit_length=limit_length)
             self.val_dataset = dataset
         elif data_type == "train":
             if not cluster_sample:
                 dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                                        transform=transform_compose, weighted=weighted)
+                                        transform=transform_compose, weighted=weighted, limit_length=limit_length)
             else:
                 dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
                             transform=transform_compose, cluster_sampling=cluster_sample,
-                            cluster_tsv=cluster_tsv, weighted=weighted)
+                            cluster_tsv=cluster_tsv, weighted=weighted, limit_length=limit_length)
             self.train_dataset = dataset
         else:
             raise ValueError("The data_type {} is not an option (choose between train and val)".format(
@@ -212,7 +213,6 @@ class Train_NeuralNet():
             #  sending data to device
             embeddings = embeddings.to(self.device, non_blocking=asynchronity)
             labels = labels.to(self.device, non_blocking=asynchronity)
-            print(labels.unique(return_counts=True))
             lengths = lengths.to(self.device, non_blocking=asynchronity)
             #  resetting gradients
             self.optimizer.zero_grad(set_to_none=True)
@@ -292,18 +292,10 @@ class Train_NeuralNet():
                     print("FILE WRONG: ", batch["File_Names"])
                 mcc = Json_Results.calculate_metrics_GPU(labels=label_c, predictions=pred_c)
                 mcc_pass += mcc
-
-                if last_epoch:
-                    genome_names = batch["File_Names"]
-                    att_results["Genomes"].extend(genome_names)
-                    prot_names = batch["Protein_IDs"]
-                    att_results["Proteins"].extend(prot_names)
-                    attentions = attentions.detach().cpu().numpy()
-                    att_results["Attentions"].append(attentions)
                 #  clean gpu (maybe unnecessary
                 count += 1
         loss_pass = loss_pass/count
-        mcc_pass = loss_pass/count
+        mcc_pass = mcc_pass/count
         if last_epoch:
             return loss_lst, mcc_lst, att_results, profiler
         else:

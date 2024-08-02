@@ -93,7 +93,8 @@ class ConfigModel:
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc",
                     "train_results", "memory_report", "results_dir", "compiler", "normalize",
-                    "bucketing", "stratified", "warm_up", "swa", "ema", "wandb_report"])
+                    "bucketing", "stratified", "warm_up", "swa", "ema", "wandb_report",
+                    "limit_length"])
         return train_parameters
 
     def init_pred_parameters(self):

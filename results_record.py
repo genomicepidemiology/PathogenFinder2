@@ -8,7 +8,7 @@ import numpy as np
 
 class Json_Results:
     
-    batch_checkpoint = 2
+    batch_checkpoint = 15
 
     def __init__(self, wandb_results=False, configuration=None, name="",
 			model=None, criterion=None):

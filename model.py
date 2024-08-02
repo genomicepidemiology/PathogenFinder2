@@ -185,7 +185,8 @@ class Compile_Model:
                             dual_pred=dual_pred,
                             weighted=self.config.train_parameters["imbalance_weight"],
                             normalize=self.config.train_parameters["normalize"],
-                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"],
+                            limit_length=self.config.train_parameters["limit_length"])
         # Create Val data
         train_instance.create_dataset(data_df=self.config.train_parameters["val_df"],
                             data_loc=self.config.train_parameters["val_loc"],

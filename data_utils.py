@@ -96,7 +96,7 @@ class ProteomeDataset(Dataset):
 
     def __init__(self, csv_file, root_dir, sampling=False,
                  cluster_tsv=None, transform=None, weighted=False,
-                 load_data=True):
+                 load_data=True, limit_length=False):
         self.landmarks_frame = pd.read_csv(csv_file, sep="\t")
         self.root_dir = os.path.abspath(root_dir)
         self.transform = transform
@@ -106,6 +106,7 @@ class ProteomeDataset(Dataset):
             weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame)
             self.weights = torch.Tensor(weights)
         self.load_data = load_data
+        self.limit_length = limit_length
 
     def get_weights(self):
         return self.weights
@@ -128,6 +129,9 @@ class ProteomeDataset(Dataset):
             embeddings, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
         else:
             embeddings, length_proteome, protein_names = np.empty((2,2)), self.landmarks_frame.iloc[idx]["Protein Count"], None
+        if self.limit_length:
+            embeddings = embeddings[:self.limit_length,:]
+            print(embeddings.shape)
         pathophenotype = self.landmarks_frame.iloc[idx]["PathoPhenotype"]
         sample = {'Embeddings': embeddings, 'Label': pathophenotype, "Protein Count": length_proteome,
                   "Protein_IDs": protein_names, "File_Name": file_name}
@@ -341,6 +345,16 @@ class SimilarityBootstrap(Sampler):
 
 
 if __name__ == '__main__':
+    path = "/ceph/hpc/data/d2023d12-072-users/dataset20000_orig/embedding_files/all_files/"
+
+    files = ['GCF_000/GCF_000157055.1_ASM15705v1_genomic.h5', 'GCF_002/GCF_002304155.1_ASM230415v1_genomic.h5']
+    for f in files:
+        print(f)
+        print(ProteomeDataset.open_embedfile("{}/{}".format(path, f)))
+
+
+
+
     from collections import Counter
     import matplotlib.pyplot as plt
     import seaborn as sns
