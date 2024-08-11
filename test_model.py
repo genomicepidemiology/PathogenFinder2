@@ -1,0 +1,176 @@
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import LambdaLR, OneCycleLR
+import pytorch_warmup as warmup
+from tqdm import tqdm
+import os
+import numpy as np
+import pandas as pd
+import sys
+from datetime import datetime
+from torchvision import transforms
+import matplotlib.pyplot as plt
+import wandb
+from sklearn.utils import resample
+from sklearn.metrics import balanced_accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, matthews_corrcoef
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, RocCurveDisplay, roc_curve, PrecisionRecallDisplay, precision_recall_curve, det_curve, DetCurveDisplay
+
+sys.dont_write_bytecode = True
+
+from data_utils import ProteomeDataset, ToTensor, Normalize_Data, BucketSampler, FractionEmbeddings, PhenotypeInteger
+from data_utils import NN_Data
+from results_record import Json_Results
+from utils import NNUtils, Metrics
+
+
+class Test_NeuralNet:
+
+    def __init__(self, network, configuration, mixed_precision=None, results_dir=None, results_module=None):
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6'
+        torch.cuda.empty_cache()
+        self.device = NNUtils.get_device()
+        print("Testing on {}".format(self.device))
+        self.network = network.to(self.device)
+        self.configuration = configuration
+        self.results_dir = results_dir
+        self.results_module = results_module
+
+    def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att):
+
+        test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=False,
+                                             shuffle=True, pin_memory=asynchronity, bucketing=False, drop_last=False)
+        predictions_lst = []
+        labels_lst = []
+        lengths_lst = []
+        filenames_lst = []
+        
+        
+        if report_att and not os.path.isdir("{}/attention_vals_test".format(self.results_dir)):
+            os.mkdir("{}/attention_vals_test".format(self.results_dir))
+
+        with torch.inference_mode():
+            for batch in tqdm(test_loader):
+                embeddings = batch["Input"]
+                labels = batch["PathoPhenotype"]
+                lengths = batch["Protein Count"]
+                filename = batch["File_Names"]
+                prot_name = batch["Protein_IDs"]
+                labels_lst.extend(labels.reshape(len(labels),).tolist())
+                lengths_lst.extend(lengths.reshape(len(lengths,)).tolist())
+                filenames_lst.extend(filename)
+                #  sending data to device
+                embeddings = embeddings.to(self.device, non_blocking=asynchronity)
+                labels = labels.to(self.device, non_blocking=asynchronity)
+                lengths = lengths.to(self.device, non_blocking=asynchronity)
+                #  making predictions
+                predictions_logit, attentions = self.network(embeddings, lengths)
+                predictions = torch.sigmoid(predictions_logit)
+                predictions_lst.extend(predictions.to("cpu").reshape(len(predictions,)).tolist())
+                attentions = attentions.to("cpu")
+                if report_att:
+                    for filename_, attentions_, prot_name_ in zip(filename, attentions, prot_name):
+                        prot_name_ = np.array(prot_name_)
+                        attentions_ = attentions_.squeeze().numpy()[:len(prot_name_)]
+                        np.savez_compressed("{}/attention_vals_test/{}".format(self.results_dir, filename_),
+                                            attentions=attentions_, protein_IDs=prot_name_)
+        results_df = pd.DataFrame({"Filename": filenames_lst, "Protein_Count": lengths_lst,
+					"Correct Label": labels_lst, "Predictions": predictions_lst})
+        results_df["Predictions (Label)"] = 0
+        results_df.loc[results_df["Predictions"]>0.5, "Predictions (Label)"] = 1
+        results_df.to_csv("{}/predictions_test.tsv".format(self.results_dir), sep="\t", index=False)
+
+        metrics = self.calculate_metrics(results_df=results_df, bootstrap=20)
+
+        with open("{}/results_test.txt".format(self.results_dir), "w") as res_file:
+            res_file.write("Test Results File\n")
+            res_file.write("-----------------------------------------------------------------------\n")
+            res_file.write("\n")
+            for k, val in metrics.items():
+                res_file.write("{}: {}({})\n".format(k, val["Mean"], val["Std"]))
+                self.results_module.test_results(k, val["Mean"], val["Std"])
+
+        cm_display, roc_display, pr_display, det_display = self.get_graphs(data=results_df)
+
+        self.make_graph(display=cm_display, name_file="confusion_matrix",
+                       title="Confusion Matrix")
+        self.make_graph(display=roc_display, name_file="ROC_curve",
+                       title="ROC Curve")
+        self.make_graph(display=pr_display, name_file="precision_recall",
+                       title="Precision Recall")
+#        self.make_graph(display=det_display, name_file="det",
+ #                      title="DET")
+
+    def make_graph(self, display, name_file, title):
+        fig, ax = plt.subplots()
+        display.plot(ax=ax)
+        plt.title(title)
+        plt.savefig("{}/{}.png".format(self.results_dir, name_file))
+        self.results_module.log_plot(fig=fig, name=title)
+        plt.close()
+
+
+
+    def get_graphs(self, data):
+        y_test = data["Correct Label"]
+        y_pred = data["Predictions (Label)"]
+        y_score = data["Predictions"]
+
+        cm_display = ConfusionMatrixDisplay(confusion_matrix(y_test, y_pred))
+
+        fpr, tpr, _ = roc_curve(y_test, y_score)
+        roc_display = RocCurveDisplay(fpr=fpr, tpr=tpr)
+
+        prec, recall, _ = precision_recall_curve(y_test, y_score, pos_label=1)
+        pr_display = PrecisionRecallDisplay(precision=prec, recall=recall)
+
+        fpr, fnr, _ = det_curve(y_test, y_pred)
+
+        det_display = DetCurveDisplay(fpr=fpr, fnr=fnr)
+        return cm_display, roc_display, pr_display, det_display
+       
+
+    def get_metrics(self, data):
+        b_acc = balanced_accuracy_score(data["Correct Label"], data["Predictions (Label)"])
+        f1 = f1_score(data["Correct Label"], data["Predictions (Label)"])
+        precision = precision_score(data["Correct Label"], data["Predictions (Label)"])
+        recall = recall_score(data["Correct Label"], data["Predictions (Label)"])
+        rocauc = roc_auc_score(data["Correct Label"], data["Predictions (Label)"])
+        mcc = matthews_corrcoef(data["Correct Label"], data["Predictions (Label)"])
+        return b_acc, f1, precision, recall, rocauc, mcc
+
+    def calculate_metrics(self, results_df, bootstrap=False):
+        if bootstrap:
+            bacc_lst = []
+            f1_lst = []
+            precision_lst = []
+            recall_lst = []
+            rocauc_lst = []
+            mcc_lst = []
+            for i in range(bootstrap):
+                ind_boot = resample(results_df.index, n_samples=len(results_df))
+                boot_data = results_df.iloc[ind_boot]
+                _b_acc, _f1, _precision, _recall, _rocauc, _mcc = self.get_metrics(data=results_df)
+                bacc_lst.append(_b_acc)
+                f1_lst.append(_f1)
+                precision_lst.append(_precision)
+                recall_lst.append(_recall)
+                rocauc_lst.append(_rocauc)            
+                mcc_lst.append(_mcc)
+            b_acc, b_acc_std = np.mean(bacc_lst), np.std(bacc_lst)
+            f1, f1_std = np.mean(f1_lst), np.std(f1_lst)
+            precision, precision_std = np.mean(precision_lst), np.std(precision_lst)
+            recall, recall_std = np.mean(recall_lst), np.std(recall_lst)
+            rocauc, rocauc_std = np.mean(rocauc_lst), np.std(rocauc_lst)
+            mcc, mcc_std = np.mean(mcc_lst), np.std(mcc_lst)
+        else:
+            b_acc, f1, precision, recall, rocauc, mcc = self.get_metrics(data=results_df)
+            b_acc_std, f1_std, precision_std, recall_std, rocauc_std, mcc_std = None
+        metrics = {"Balanced_Accuracy": {"Mean":b_acc, "Std":b_acc_std}, "F1": {"Mean":f1, "Std":f1_std},
+                   "Precision": {"Mean":precision, "Std":precision_std}, "Recall": {"Mean":recall, "Std":recall_std},
+                   "ROC_AUC": {"Mean":rocauc, "Std":rocauc_std}, "MCC": {"Mean": mcc, "Std":mcc_std}}
+        return metrics
+
+
+

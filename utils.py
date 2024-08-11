@@ -4,6 +4,7 @@ from torch import nn
 import types
 import torch
 from datetime import datetime
+from torchmetrics.classification import BinaryMatthewsCorrCoef
 
 
 def is_valid_file(parser, arg):
@@ -40,6 +41,21 @@ class NNUtils():
         if not os.path.isdir(results_dir):
             os.mkdir(results_dir)
         return results_dir
+
+class Metrics:
+
+    @staticmethod
+    def calculate_metrics(predictions, labels):
+        predictions_binary = np.where(np.array(predictions) > 0.5, 1, 0)
+        acc = balanced_accuracy_score(labels, predictions_binary)
+        mcc = matthews_corrcoef(labels, predictions_binary)
+        return acc, mcc
+
+    @staticmethod
+    def calculate_MCC(predictions, labels, device):
+        metric = BinaryMatthewsCorrCoef().to(device)
+        mcc = metric(predictions, labels)
+        return mcc
 
 
 class Get_Normalization:
@@ -88,4 +104,36 @@ class Get_Normalization:
         embeddings, len_proteome, _ = ProteomeDataset.open_embedfile(file_path)
         self.sum_dim = np.add(self.sum_dim, np.sum(embeddings, axis=0))
         self.n_prot += len_proteome
+
+class EarlyStopping:
+
+    def __init__(self, patience, delta, measure="max"):
+        self.patience = patience
+        self.delta = delta
+        self.best_score = None
+        self.measure = measure
+        self.count_stop = 0
+
+
+    def __call__(self, val_measure):
+        if self.best_score is None:
+            self.best_score = val_measure
+        else:
+            if self.measure == "max":
+                condition = val_measure < self.best_score + self.delta
+            elif self.measure == "min":
+                condition = val_measure > self.best_score - self.delta
+            else:
+                raise ValueError("The measure {} does not exists".format(self.measure))
+            if condition:
+                self.count_stop += 1
+            else:
+                self.count_stop = 0
+                self.best_score = val_measure
+        if self.count_stop > self.patience:
+            return True
+        else:
+            return False
+  
+        
 

@@ -69,51 +69,36 @@ class Attention_Methods(nn.Module):
 
 class Conv1D_AddAtt_Net(nn.Module):
 
-    def __init__(self, input_dim=1024, conv_channels=[1024*4, 1024*2,100], num_of_class=1,
-                 kernel_sizes=[5,3,3], stride=1, nodes_fnn=50,
-                 dropout_conv=0.2, dropout_fnn=0.3, dropout_att=0.3,
+    def __init__(self, input_dim=1024, num_of_class=1,
+                 nodes_fnn=50, dropout_fnn=0.3, dropout_att=0.3,
                  dropout_in=0.4, batch_norm=False, layer_norm=False, attention_type="Bahdanau"):
         super(Conv1D_AddAtt_Net, self).__init__()
         
         assert len(kernel_sizes) == len(conv_channels)
-        self.in_layer = nn.Sequential(OrderedDict([
-                ("drop_in", nn.Dropout1d(dropout_in))]))
 
-        self.conv1d_layers = nn.ModuleList()
-        
-        for kernel, dim, in zip(kernel_sizes, conv_channels):
-            layer_conv = nn.Sequential(OrderedDict([
-            ("conv1d", nn.Conv1d(input_dim, dim,
-                        kernel_size=kernel,
-                        stride=1, padding=kernel//2)),
-            ("batch_norm", nn.BatchNorm1d(dim)),
-            ("activation", nn.ReLU()),
-            ("dropout", nn.Dropout1d(dropout_conv))]))
-            self.conv1d_layers.append(layer_conv)
-            input_dim = dim
-            
-            if not batch_norm:
-                del layer_conv[1]
+        if batch_norm:
+            self.in_layer = nn.Sequential(OrderedDict([
+                ("batchnorm", nn.BatchNorm2d(input_dim)),
+                ("drop_in", nn.Dropout1d(dropout_in))
+            ]))
+        else:
+            self.in_layer = nn.Sequential(OrderedDict([
+                ("drop_in", nn.Dropout1d(dropout_in))
+            ]))
        
         self.attention_layer = Attention_Methods(attention_type=attention_type,
-							dimensions_in=conv_channels[2],
+							dimensions_in=input_dim,
                                                         dropout=dropout_att)
         self.linear_1 = nn.Sequential(OrderedDict([
-            ("linear", nn.Linear(conv_channels[2], nodes_fnn)),
-            ("batch_norm", nn.BatchNorm1d(nodes_fnn)),
+            ("linear", nn.Linear(input_dim, nodes_fnn)),
             ("activation", nn.LeakyReLU()),
             ("dropout", nn.Dropout(dropout_fnn))]))
 
         self.linear_out = nn.Linear(nodes_fnn, num_of_class)
 
         self.init_weights()
-        if not batch_norm: 
-            del self.linear_1[1]
 
     def init_weights(self):
-        for layer in self.conv1d_layers:
-            torch.nn.init.kaiming_normal_(layer[0].weight, mode='fan_in', nonlinearity='relu')
-            layer[0].bias.data.fill_(0.01)
 
         torch.nn.init.kaiming_normal_(self.linear_1[0].weight, mode='fan_in', nonlinearity='leaky_relu')
         self.linear_1[0].bias.data.fill_(0.01)
@@ -152,15 +137,6 @@ class Conv1D_AddAtt_Net(nn.Module):
     def forward(self, x, seq_lengths):
         x = self.in_layer(x)
         mask = Attention_Methods.create_mask(seq_lengths=seq_lengths, dimensions_batch=x.shape)
-
-        x = x.permute(0, 2, 1)
-
-        ## Convolutional ##
-        for layer in self.conv1d_layers:
-            x = layer(x)
-            x = x.masked_fill_(mask, 0)
-
-        x = x.permute(0, 2, 1)
         ## Additive Attention ##
         x, attentions = self.attention_layer(x, mask)
         ## FNN ##

@@ -10,6 +10,7 @@ import h5py
 import os
 import pandas as pd
 import numpy as np
+from torchmetrics.classification import BinaryMatthewsCorrCoef
 
 import time
 
@@ -57,9 +58,9 @@ class FractionEmbeddings(object):
         self.start_fr = int(start_fr)
         self.end_fr = int(end_fr)
     def __call__(self, sample):
-        embeddings = sample["Embeddings"]
+        embeddings = sample["Input"]
         embeddings = embeddings[:,self.start_fr:self.end_fr]
-        sample["Embeddings"] = embeddings
+        sample["Input"] = embeddings
         return sample
 
 
@@ -78,9 +79,9 @@ class Normalize_Data:
         return array_vec["mean"], array_vec["std"]
 
     def __call__(self, sample):
-        embeddings = sample["Embeddings"]
+        embeddings = sample["Input"]
         norm_embeddings = (embeddings-self.mean_vec)/self.std_vec
-        sample["Embeddings"] = norm_embeddings.astype(np.float32)
+        sample["Input"] = norm_embeddings.astype(np.float32)
         return sample
 
 class ProteomeDataset(Dataset):
@@ -94,9 +95,9 @@ class ProteomeDataset(Dataset):
 	                  "Pathogenic": np.array([1,0], dtype=int)}
 		    }
 
-    def __init__(self, csv_file, root_dir, sampling=False,
-                 cluster_tsv=None, transform=None, weighted=False,
-                 load_data=True, limit_length=False):
+    def __init__(self, csv_file, root_dir, input_type="protein_embeddings",
+                 sampling=False, cluster_tsv=None, transform=None, weighted=False,
+                 load_data=True):
         self.landmarks_frame = pd.read_csv(csv_file, sep="\t")
         self.root_dir = os.path.abspath(root_dir)
         self.transform = transform
@@ -106,7 +107,10 @@ class ProteomeDataset(Dataset):
             weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame)
             self.weights = torch.Tensor(weights)
         self.load_data = load_data
-        self.limit_length = limit_length
+        if input_type in ["protein_embeddings", "proteome_embedding", "protein_count"]:
+            self.input_type = input_type
+        else:
+            raise ValueError("The input type {} is not available".format(input_type))
 
     def get_weights(self):
         return self.weights
@@ -126,14 +130,24 @@ class ProteomeDataset(Dataset):
         file_name = self.landmarks_frame.iloc[idx]["File_Embedding"]
         file_path = os.path.join(self.root_dir, file_name)
         if self.load_data:
-            embeddings, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
+            if self.input_type == "protein_embeddings":
+                input_nn, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
+            elif self.input_type == "proteome_embedding":
+                input_nn, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
+                input_nn = np.sum(input_nn, axis=1)
+            elif self.input_type == "protein_count":
+                try:
+                    input_nn = [self.landmarks_frame.iloc[idx]["Protein Count"]]
+                    length_proteome = input_nn
+                    protein_names = [None]
+                except KeyError:
+                    _, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
+                    input_nn = length_proteome
+                input_nn = np.array(input_nn, dtype=np.float32)
         else:
-            embeddings, length_proteome, protein_names = np.empty((2,2)), self.landmarks_frame.iloc[idx]["Protein Count"], None
-        if self.limit_length:
-            embeddings = embeddings[:self.limit_length,:]
-            print(embeddings.shape)
+            input_nn, length_proteome, protein_names = np.empty((2,2)), self.landmarks_frame.iloc[idx]["Protein Count"], None
         pathophenotype = self.landmarks_frame.iloc[idx]["PathoPhenotype"]
-        sample = {'Embeddings': embeddings, 'Label': pathophenotype, "Protein Count": length_proteome,
+        sample = {'Input': input_nn, 'Label': pathophenotype, "Protein Count": length_proteome,
                   "Protein_IDs": protein_names, "File_Name": file_name}
         if self.transform is not None:
             sample = self.transform(sample)
@@ -190,7 +204,7 @@ class ProteomeDataset(Dataset):
             file_names.append(b["File_Name"])
             protein_names.append(b["Protein_IDs"])
 
-            embedding_lst.append(torch.from_numpy(b["Embeddings"]))
+            embedding_lst.append(torch.from_numpy(b["Input"]))
         ## padd
         embeddings = torch.nn.utils.rnn.pad_sequence(embedding_lst, batch_first=True)
         ## compute mask
@@ -198,7 +212,7 @@ class ProteomeDataset(Dataset):
         for i, seq in enumerate(embedding_lst):
             masks[i, :len(seq)] = 0
 
-        return {"Embeddings": embeddings, "Masks": masks,
+        return {"Input": embeddings, "Masks": masks,
                 "Protein Count": torch.from_numpy(b_proteome_len),
                 "PathoPhenotype": torch.from_numpy(b_pathopheno),
                 "Protein_IDs": protein_names, "File_Names": file_names
@@ -323,6 +337,62 @@ class BucketSampler(Sampler):
         for b in range(self.num_buckets):
             ind_buck = index_info[index_info[:,1]==b,0]
             yield self.landmarks_frame.loc[ind_buck]
+
+class NN_Data:
+    
+    @staticmethod
+    def create_dataset(input_type, data_df, data_loc, data_type="train", dual_pred=False, cluster_sample=False,
+                        cluster_tsv=None, weighted=False, normalize=False, fraction_embeddings=False):
+        transform_data = []
+
+        if normalize:
+            transform_data.append(Normalize_Data(normalize))
+        else:
+            pass
+
+        if fraction_embeddings:
+            transform_data.append(FractionEmbeddings(fraction_embeddings))
+        else:
+            pass
+
+        if dual_pred:
+            transform_data.append(PhenotypeInteger(prediction="Dual"))
+        else:
+            transform_data.append(PhenotypeInteger(prediction="Single"))
+
+        transform_compose = transforms.Compose(transform_data)
+
+        if data_type == "prediction":
+            dataset = ProteomeDataset(input_type=input_type, csv_file=data_df, root_dir=data_loc, transform=transform_compose)
+        elif data_type == "train":
+            if not cluster_sample:
+                dataset = ProteomeDataset(input_type=input_type, csv_file=data_df, root_dir=data_loc,
+                                        transform=transform_compose, weighted=weighted)
+            else:
+                dataset = ProteomeDataset(input_type=input_type, csv_file=data_df, root_dir=data_loc,
+                            transform=transform_compose, cluster_sampling=cluster_sample,
+                            cluster_tsv=cluster_tsv, weighted=weighted)
+        else:
+            raise ValueError("The data_type {} is not an option (choose between train and val)".format(
+                                data_type))
+        return dataset
+
+    @staticmethod
+    def load_data(data_set, batch_size, num_workers=4, shuffle=True, pin_memory=False,
+                  bucketing=None, stratified=False, drop_last=True):
+        if bucketing:
+            bucketing_sampler = BucketSampler(data_set.landmarks_frame, batch_size=batch_size,
+                                              num_buckets=bucketing, stratified=stratified, drop_last=True)
+            data_loader = DataLoader(data_set, num_workers=num_workers,
+                              collate_fn=ProteomeDataset.collate_fn_mask, batch_sampler=bucketing_sampler,
+                              persistent_workers=False, pin_memory=pin_memory)
+        else:
+            data_loader = DataLoader(data_set, batch_size=batch_size, num_workers=num_workers,
+                              collate_fn=ProteomeDataset.collate_fn_mask, drop_last=drop_last,
+                              shuffle=shuffle, persistent_workers=False, pin_memory=pin_memory)
+
+        return data_loader
+
         
 
 class SimilaritySampler(Sampler):
@@ -345,16 +415,6 @@ class SimilarityBootstrap(Sampler):
 
 
 if __name__ == '__main__':
-    path = "/ceph/hpc/data/d2023d12-072-users/dataset20000_orig/embedding_files/all_files/"
-
-    files = ['GCF_000/GCF_000157055.1_ASM15705v1_genomic.h5', 'GCF_002/GCF_002304155.1_ASM230415v1_genomic.h5']
-    for f in files:
-        print(f)
-        print(ProteomeDataset.open_embedfile("{}/{}".format(path, f)))
-
-
-
-
     from collections import Counter
     import matplotlib.pyplot as plt
     import seaborn as sns

@@ -81,7 +81,7 @@ class ConfigModel:
         model_parameters.init_params(
                 list_params=["batch_size", "model_name", "model_structure",  "out_dim", "out_init",
                     "out_sigmoid", "batch_norm", "layer_norm", "train_status", "saved_model", 
-                    "mode", "input_dim"])
+                    "mode", "input_dim", "input_type"])
         return model_parameters
 
     def init_train_parameters(self):
@@ -91,10 +91,9 @@ class ConfigModel:
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
                     "weight_decay", "lr_end", "fused_OptBack", "clipping", "num_workers",
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
-                    "loss_function", "train_df", "train_loc", "val_df", "val_loc",
-                    "train_results", "memory_report", "results_dir", "compiler", "normalize",
-                    "bucketing", "stratified", "warm_up", "swa", "ema", "wandb_report",
-                    "limit_length"])
+                    "loss_function", "train_df", "train_loc", "val_df", "val_loc", "early_stopping",
+                    "save_model", "train_results", "memory_report", "results_dir", "compiler", "normalize",
+                    "bucketing", "stratified", "warm_up", "swa", "ema", "wandb_report"])
         return train_parameters
 
     def init_pred_parameters(self):

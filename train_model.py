@@ -14,9 +14,9 @@ from torch.optim import swa_utils
 
 sys.dont_write_bytecode = True
 
-from data_utils import ProteomeDataset, ToTensor, Normalize_Data, BucketSampler, FractionEmbeddings, PhenotypeInteger
+from data_utils import ProteomeDataset, ToTensor, Normalize_Data, BucketSampler, FractionEmbeddings, PhenotypeInteger, NN_Data
 from results_record import Json_Results
-from utils import NNUtils
+from utils import NNUtils, EarlyStopping, Metrics
 
 
 class Train_NeuralNet():
@@ -43,16 +43,14 @@ class Train_NeuralNet():
         else:
             self.network = torch.compile(network, mode=compiler, dynamic=True)
         self.loss = loss_function
-        self.train_dataset = None
-        self.val_dataset = None
 
         self.mixed_precision = mixed_precision
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
 
 
-        self.results_training = Json_Results(wandb_results=wandb_report, configuration=configuration,
-                                           name=os.path.basename(self.results_dir), model=self.network,
-                                           criterion=self.loss)
+        self.results_training = wandb_report
+        self.results_training.start_train_report(model=self.network, criterion=self.loss)
+
         self.saved_model = {"epoch": None, 'model_state_dict': None, 'optimizer_state_dict': None,
 				'loss': None, "val_measure": None}
 
@@ -112,60 +110,6 @@ class Train_NeuralNet():
             torch.cuda.memory._dump_snapshot("{}/memory_record.pkl".format(self.results_dir))
             torch.cuda.memory._record_memory_history(enabled=None)
 
-
-    def create_dataset(self, data_df, data_loc, data_type="train", dual_pred=False, cluster_sample=False,
-                        cluster_tsv=None, weighted=False, normalize=False, fraction_embeddings=False,
-                        limit_length=False):
-        transform_data = []
-
-        if normalize:
-            transform_data.append(Normalize_Data(normalize))
-        else:
-            pass
-
-        if fraction_embeddings:
-            transform_data.append(FractionEmbeddings(fraction_embeddings))
-        else:
-            pass
-
-        if dual_pred:
-            transform_data.append(PhenotypeInteger(prediction="Dual"))
-        else:
-            transform_data.append(PhenotypeInteger(prediction="Single"))
-
-        transform_compose = transforms.Compose(transform_data)
-
-        if data_type == "validation":
-            dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc, transform=transform_compose, limit_length=limit_length)
-            self.val_dataset = dataset
-        elif data_type == "train":
-            if not cluster_sample:
-                dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                                        transform=transform_compose, weighted=weighted, limit_length=limit_length)
-            else:
-                dataset = ProteomeDataset(csv_file=data_df, root_dir=data_loc,
-                            transform=transform_compose, cluster_sampling=cluster_sample,
-                            cluster_tsv=cluster_tsv, weighted=weighted, limit_length=limit_length)
-            self.train_dataset = dataset
-        else:
-            raise ValueError("The data_type {} is not an option (choose between train and val)".format(
-                                data_type))
-
-    def load_data(self, data_set, batch_size, num_workers=4, shuffle=True, pin_memory=False,
-                  bucketing=None, stratified=False):
-        if bucketing:
-            bucketing_sampler = BucketSampler(data_set.landmarks_frame, batch_size=batch_size,
-                                              num_buckets=bucketing, stratified=stratified, drop_last=True)
-            data_loader = DataLoader(data_set, num_workers=num_workers,
-                              collate_fn=ProteomeDataset.collate_fn_mask, batch_sampler=bucketing_sampler,
-                              persistent_workers=False, pin_memory=pin_memory)
-        else:
-            data_loader = DataLoader(data_set, batch_size=batch_size, num_workers=num_workers,
-                              collate_fn=ProteomeDataset.collate_fn_mask, drop_last=True,
-                              shuffle=shuffle, persistent_workers=False, pin_memory=pin_memory)
-
-        return data_loader
-
     def calculate_loss(self, predictions_logit, labels):
         predictions = torch.sigmoid(predictions_logit)
         if self.loss == torch.nn.modules.loss.BCELoss:
@@ -207,7 +151,7 @@ class Train_NeuralNet():
         for batch in tqdm(train_loader):
             if self.profiler is not None:
                 self.profiler.step()
-            embeddings = batch["Embeddings"]
+            embeddings = batch["Input"]
             labels = batch["PathoPhenotype"]
             lengths = batch["Protein Count"]
             #  sending data to device
@@ -244,9 +188,9 @@ class Train_NeuralNet():
             pred_c = predictions.detach()
             label_c = labels.detach()
             loss_pass += loss_c
-            mcc = Json_Results.calculate_metrics_GPU(labels=label_c, predictions=pred_c)
+            mcc = Metrics.calculate_MCC(labels=label_c, predictions=pred_c, device=self.device)
             mcc_pass += mcc
-            self.results_training.step_log(loss_train=loss_c, lr=self.optimizer.param_groups[-1]['lr'], batch_n=count,
+            self.results_training.add_step_info(loss_train=loss_c, lr=self.optimizer.param_groups[-1]['lr'], batch_n=count,
                                              len_dataloader=len_dataloader)
             #  clean gpu (maybe unnecessary)
             count += 1
@@ -272,7 +216,7 @@ class Train_NeuralNet():
             for batch in tqdm(val_loader):
                 if self.profiler is not None:
                     self.profiler.step()
-                embeddings = batch["Embeddings"]
+                embeddings = batch["Input"]
                 labels = batch["PathoPhenotype"]
                 lengths = batch["Protein Count"]
                 #  sending data to device
@@ -290,47 +234,57 @@ class Train_NeuralNet():
                 loss_pass += loss_c
                 if torch.isnan(loss_c):
                     print("FILE WRONG: ", batch["File_Names"])
-                mcc = Json_Results.calculate_metrics_GPU(labels=label_c, predictions=pred_c)
+                mcc = Metrics.calculate_MCC(labels=label_c, predictions=pred_c, device=self.device)
                 mcc_pass += mcc
+
+                if last_epoch:
+                    genome_names = batch["File_Names"]
+                    att_results["Genomes"].extend(genome_names)
+                    prot_names = batch["Protein_IDs"]
+                    att_results["Proteins"].extend(prot_names)
+                    attentions = attentions.detach().cpu().numpy()
+                    att_results["Attentions"].append(attentions)
                 #  clean gpu (maybe unnecessary
                 count += 1
         loss_pass = loss_pass/count
-        mcc_pass = mcc_pass/count
+        mcc_pass = loss_pass/count
         if last_epoch:
             return loss_lst, mcc_lst, att_results, profiler
         else:
             return loss_pass, mcc_pass, profiler
 
     def best_epoch_retain(self, new_val, optimizer, model, epoch, loss):
-        if self.saved_model["val_measure"] is not None and self.saved_model["val_measure"] > new_val:
+        if self.saved_model["val_measure"] is None or self.saved_model["val_measure"] > new_val:
             return {"epoch": epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
                                 'loss': loss, "val_measure": new_val}
         else:
             return self.saved_model
 
-    def early_stopping(self):
-        pass
-        
+       
 
-    def train(self, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
+    def __call__(self, train_dataset, val_dataset, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
             lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False, stratified=False,
-            fused_OptBack=False, clipping=False, bucketing=False, warmup_period=False, stop_method="best_epoch"):
+            fused_OptBack=False, clipping=False, bucketing=False, warmup_period=False, early_stopping=True, keep_model=False):
 
 
-        pos_weight = self.train_dataset.get_weights()
+        pos_weight = train_dataset.get_weights()
 
         self.loss_function = self.loss()
 
         #  creating dataloaders
-        train_loader = self.load_data(self.train_dataset, batch_size, num_workers=num_workers,
+        train_loader = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
-        val_loader = self.load_data(self.val_dataset, batch_size, num_workers=num_workers,
+        val_loader = NN_Data.load_data(val_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing)
 
         steps = steps=len(train_loader)
         self.set_optimizer(epochs=epochs, steps=steps, optimizer=optimizer, learning_rate=learning_rate, 
                 weight_decay=weight_decay, lr_schedule=lr_schedule, end_lr=end_lr, amsgrad=amsgrad, fused_OptBack=fused_OptBack,
                 warmup_period=warmup_period)
+        if early_stopping:
+            early_stopping_method = EarlyStopping(patience=7, delta=0.001)
+        else:
+            early_stopping_method = None
 
         for epoch in range(epochs):
             print(f'Epoch {epoch+1}/{epochs}') 
@@ -342,20 +296,25 @@ class Train_NeuralNet():
             print('validating...')
             loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader, asynchronity=asynchronity)
 
-            self.results_training.add_epoch_report(epoch=epoch, loss_t=loss_train, loss_v=loss_val, 
-                                                   lr=lr_rate, mcc_t=mcc_t, mcc_v=mcc_v)
-            if stop_method == "early_stopping":
-                pass
-            elif stop_method == "best_epoch":
+            self.results_training.add_epoch_info(epoch=epoch, loss_t=loss_train, loss_v=loss_val, 
+                                                   mcc_t=mcc_t, mcc_v=mcc_v)
+
+            if keep_model == "best_epoch":
                 self.saved_model = self.best_epoch_retain(new_val=mcc_v, optimizer=self.optimizer, model=self.network, epoch=epoch, loss=loss_train)
-            else:
-                pass
 
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
                 self.update_scheduler(value=loss_val)
             end_e_time = time.time()
-            self.results_training.time_log(end_e_time-start_e_time)
+            self.results_training.add_time_info(end_e_time-start_e_time)
             print("training_loss: {}, validation_loss: {}".format(loss_train, loss_val))
+            if early_stopping:
+                stop = early_stopping_method(val_measure=mcc_v)
+                if stop:
+                    break
+ 
+        if keep_model == "last_epoch":
+            self.saved_model = {"epoch": epoch, 'model_state_dict': self.network.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict(),
+                                'loss': loss_train, "val_measure": mcc_v}
             
         if self.profiler is not None:
             self.stop_memory_reports()

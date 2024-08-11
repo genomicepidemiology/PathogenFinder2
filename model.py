@@ -22,8 +22,10 @@ from models.conv1d_STD import Conv1D_Net
 from config_model import ConfigModel, ParamsModel
 from train_model import Train_NeuralNet
 from prediction import Prediction_NeuralNet
-from utils import NNUtils
-from results_record import Json_Results
+from test_model import Test_NeuralNet
+from utils import NNUtils, Metrics
+from results_record import Json_Results, Wandb_Results
+from data_utils import NN_Data
 
 
 
@@ -48,7 +50,8 @@ class Compile_Model:
 
         self.results_dir = NNUtils.set_results_files(
 				results_dir=self.config.train_parameters["results_dir"])
-
+        self.results_model = Wandb_Results(configuration=self.config,
+                                            name=os.path.basename(self.results_dir))
 
     def get_model_carcass(self, model_type):
         if model_type == "conv1d_additiveatt":
@@ -114,17 +117,23 @@ class Compile_Model:
         self.config.standard_init_train()
         self.config.load_json_params(json_file)
 
-    def save_model(self, path, state_dict=True):
-        if state_dict:
-            torch.save(self.model.state_dict(), path)
+    def save_model(self, data, path, type_save="model"):
+        PATH = "{}/model.pt".format(path)
+        if type_save == "state_dict":
+            torch.save(data.state_dict(), PATH)
+        elif type_save == "checkpoint":
+            torch.save(data, PATH)
         else:
-            torch.save(self.model, PATH)
+            torch.save(data, PATH)
     
-    def load_model(self, path, state_dict=True):
-        if state_dict:
-            self.model_carcass.load_state_dict(torch.load(path))
+    def load_model(self, path, type_load="model"):
+        PATH = "{}/model.pt".format(path)
+        if type_load == "state_dict":
+            self.model.load_state_dict(torch.load(PATH))
+        elif type_load == "checkpoint":
+            self.model.load_state_dict(torch.load(PATH)["model_state_dict"])
         else:
-            self.model = torch.load(path)
+            self.model = torch.load(PATH)
     
     def get_config(self):
         return self.config
@@ -175,9 +184,10 @@ class Compile_Model:
                             memory_report=self.config.train_parameters["memory_report"],
                             mixed_precision=self.config.train_parameters["mix_prec"],
                             compiler=self.config.train_parameters["compiler"],
-			    wandb_report=self.config.train_parameters["wandb_report"])
+			    wandb_report=self.results_model)
         # Create Train data
-        train_instance.create_dataset(data_df=self.config.train_parameters["train_df"],
+        train_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=self.config.train_parameters["train_df"],
                             data_loc=self.config.train_parameters["train_loc"],
                             data_type="train",
                             cluster_sample=self.config.train_parameters["data_sample"],
@@ -185,12 +195,12 @@ class Compile_Model:
                             dual_pred=dual_pred,
                             weighted=self.config.train_parameters["imbalance_weight"],
                             normalize=self.config.train_parameters["normalize"],
-                            fraction_embeddings=self.config.train_parameters["prot_dim_split"],
-                            limit_length=self.config.train_parameters["limit_length"])
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
         # Create Val data
-        train_instance.create_dataset(data_df=self.config.train_parameters["val_df"],
+        val_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=self.config.train_parameters["val_df"],
                             data_loc=self.config.train_parameters["val_loc"],
-                            data_type="validation",
+                            data_type="prediction",
                             cluster_sample=self.config.train_parameters["data_sample"],
                             cluster_tsv=self.config.train_parameters["cluster_tsv"],
                             dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
@@ -198,7 +208,8 @@ class Compile_Model:
 
         # Train Model
         self.config.model_parameters["train_status"] = "Start"
-        best_model = train_instance.train(epochs=self.config.train_parameters["epochs"],
+        best_model = train_instance(train_dataset=train_dataset, val_dataset=val_dataset,
+                            epochs=self.config.train_parameters["epochs"],
                             batch_size=self.config.model_parameters["batch_size"],
                             optimizer=self.config.train_parameters["optimizer"],
                             learning_rate=self.config.train_parameters["learning_rate"], 
@@ -210,30 +221,56 @@ class Compile_Model:
                             clipping=self.config.train_parameters["clipping"],
                             bucketing=self.config.train_parameters["bucketing"],
                             stratified=self.config.train_parameters["stratified"],
-                            warmup_period=self.config.train_parameters["warm_up"])
+                            warmup_period=self.config.train_parameters["warm_up"],
+                            early_stopping=self.config.train_parameters["early_stopping"],
+                            keep_model=self.config.train_parameters["save_model"])
      
 
-        if self.config.model_parameters["saved_model"]:
-            self.save_model(self.config.model_parameters["saved_model"])
-        self.config.model_parameters["train_status"]
+        self.config.model_parameters["train_status"] = "Done"
 
-        train_instance.save_model(best_model)
+        if self.config.train_parameters["save_model"]:
+            self.save_model(data=best_model, path=self.results_dir, type_save="checkpoint")
 
-        return train_instance.results_dir
+        if best_model:
+            return best_model
+        else:
+            return False
 
-    def predict_model(self, data):
+    def predict_model(self):
         if self.model is None:
             raise ValueError("Set the Model First")
-        if report not in ["dictionary", "wandb", "tensorboard"]:
-            raise KeyError("The type of report {} is not available".format(report))
 
-        pred_instance.create_dataset(data_df=self.config.train_parameters["val_df"],
-                            data_loc=self.config.train_parameters["val_loc"],
-                            data_type="validation",
+        pred_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=self.config.predict_parameters["data_df"],
+                            data_loc=self.config.predict_parameters["data_loc"],
+                            data_type="prediction",
                             cluster_sample=self.config.train_parameters["data_sample"],
                             cluster_tsv=self.config.train_parameters["cluster_tsv"],
                             dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
                             fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+        prediction_instance = Prediction_NeuralNet()
+        prediction_instance(pred_dataset=pred_dataset)
+
+    def test_model(self):
+        if self.model is None:
+            raise ValueError("Set the Model First")
+
+        dual_pred = self.is_dual()
+
+        pred_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=self.config.test_parameters["test_df"],
+                            data_loc=self.config.test_parameters["test_loc"],
+                            data_type="prediction",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+        test_instance = Test_NeuralNet(network=self.model, configuration=self.config,
+                            mixed_precision=self.config.train_parameters["mix_prec"], results_dir=self.results_dir,
+                            results_module=self.results_model)
+        test_instance(test_dataset=pred_dataset, asynchronity=self.config.train_parameters["asynchronity"],
+                            num_workers=self.config.train_parameters["num_workers"],
+                            batch_size=self.config.model_parameters["batch_size"], report_att=True)
 
 
 
@@ -250,7 +287,15 @@ if __name__ == "__main__":
     config = compiled_model.get_config()
 
     if model_arguments.train:
-        results_dir_train = compiled_model.train_model()
-        config.save_data("{}/config_file.json".format(results_dir_train))
+        best_model = compiled_model.train_model()
+        config.save_data("{}/config_file.json".format(compiled_model.results_dir))
     if model_arguments.predict:
+        compiled_model.load_model("/work3/alff/results_pathogenfinder2/model_train_bucketing_07-08-2024_12-56-21")
+#        compiled_model.load_model(compiled_model.results_dir)
         compiled_model.predict_model()
+    if model_arguments.test:
+        compiled_model.results_dir = "/work3/alff/results_pathogenfinder2/model_train_bucketing_07-08-2024_15-12-45/"
+        compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
+#        compiled_model.load_model("/work3/alff/results_pathogenfinder2/model_train_bucketing_07-08-2024_12-56-21")
+        compiled_model.test_model()
+
