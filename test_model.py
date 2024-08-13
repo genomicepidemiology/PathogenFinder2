@@ -37,10 +37,10 @@ class Test_NeuralNet:
         self.results_dir = results_dir
         self.results_module = results_module
 
-    def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att):
+    def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att, bucketing, stratified):
 
-        test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=False,
-                                             shuffle=True, pin_memory=asynchronity, bucketing=False, drop_last=False)
+        test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=stratified,
+                                             shuffle=True, pin_memory=asynchronity, bucketing=bucketing, drop_last=False)
         predictions_lst = []
         labels_lst = []
         lengths_lst = []
@@ -49,7 +49,7 @@ class Test_NeuralNet:
         
         if report_att and not os.path.isdir("{}/attention_vals_test".format(self.results_dir)):
             os.mkdir("{}/attention_vals_test".format(self.results_dir))
-
+        mcc_iter = 0
         with torch.inference_mode():
             for batch in tqdm(test_loader):
                 embeddings = batch["Input"]
@@ -67,14 +67,20 @@ class Test_NeuralNet:
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions = torch.sigmoid(predictions_logit)
+                mcc = Metrics.calculate_MCC(labels=labels, predictions=predictions, device=self.device)
+                print("WTF", mcc)
+                print("Counts batch", torch.unique(predictions, return_counts=True))
+                mcc_iter += mcc
                 predictions_lst.extend(predictions.to("cpu").reshape(len(predictions,)).tolist())
-                attentions = attentions.to("cpu")
                 if report_att:
+                    attentions = attentions.to("cpu")
                     for filename_, attentions_, prot_name_ in zip(filename, attentions, prot_name):
                         prot_name_ = np.array(prot_name_)
                         attentions_ = attentions_.squeeze().numpy()[:len(prot_name_)]
-                        np.savez_compressed("{}/attention_vals_test/{}".format(self.results_dir, filename_),
+                        np.savez_compressed("{}/attention_vals_test/{}".format(self.results_dir, os.path.basename(filename_)),
                                             attentions=attentions_, protein_IDs=prot_name_)
+        print("ITER", mcc_iter/len(test_loader))
+
         results_df = pd.DataFrame({"Filename": filenames_lst, "Protein_Count": lengths_lst,
 					"Correct Label": labels_lst, "Predictions": predictions_lst})
         results_df["Predictions (Label)"] = 0
@@ -137,7 +143,12 @@ class Test_NeuralNet:
         precision = precision_score(data["Correct Label"], data["Predictions (Label)"])
         recall = recall_score(data["Correct Label"], data["Predictions (Label)"])
         rocauc = roc_auc_score(data["Correct Label"], data["Predictions (Label)"])
-        mcc = matthews_corrcoef(data["Correct Label"], data["Predictions (Label)"])
+#        mcc_ = matthews_corrcoef(data["Correct Label"].tolist(), data["Predictions (Label)"].tolist())
+        mcc =  Metrics.calculate_MCC(labels=torch.tensor(data["Correct Label"].values),
+                                predictions=torch.tensor(data["Predictions (Label)"].values), device="cpu")
+        print(Metrics.calculate_MCC(labels=torch.tensor(data["Correct Label"].values),
+                                predictions=torch.tensor(data["Predictions"].values), device="cpu"))
+        print("VALUE_COUNTS", data["Predictions (Label)"].value_counts())
         return b_acc, f1, precision, recall, rocauc, mcc
 
     def calculate_metrics(self, results_df, bootstrap=False):
@@ -163,6 +174,7 @@ class Test_NeuralNet:
             precision, precision_std = np.mean(precision_lst), np.std(precision_lst)
             recall, recall_std = np.mean(recall_lst), np.std(recall_lst)
             rocauc, rocauc_std = np.mean(rocauc_lst), np.std(rocauc_lst)
+            print(mcc_lst)
             mcc, mcc_std = np.mean(mcc_lst), np.std(mcc_lst)
         else:
             b_acc, f1, precision, recall, rocauc, mcc = self.get_metrics(data=results_df)

@@ -22,7 +22,10 @@ class Attention_Methods(nn.Module):
         else:
             self.score_proj = None
 
-        self.attention_pass = self._get_pass() 
+        self.softmax_weights = nn.Softmax(dim=-1)
+
+        self.attention_pass = self._get_pass()
+
 
         self.init_weights()      
 
@@ -59,7 +62,7 @@ class Attention_Methods(nn.Module):
 
         weights.masked_fill_(mask, -float("inf"))
 
-        att = torch.nn.functional.softmax(weights, dim=-1)
+        att = self.softmax_weights(weights)
 
         attention_result = torch.bmm(att, x_in).squeeze(1)
 
@@ -96,10 +99,10 @@ class Conv1D_AddAtt_Net(nn.Module):
                 del layer_conv[1]
        
         self.attention_layer = Attention_Methods(attention_type=attention_type,
-							dimensions_in=conv_channels[2],
+							dimensions_in=conv_channels[-1],
                                                         dropout=dropout_att)
         self.linear_1 = nn.Sequential(OrderedDict([
-            ("linear", nn.Linear(conv_channels[2], nodes_fnn)),
+            ("linear", nn.Linear(conv_channels[-1], nodes_fnn)),
             ("batch_norm", nn.BatchNorm1d(nodes_fnn)),
             ("activation", nn.LeakyReLU()),
             ("dropout", nn.Dropout(dropout_fnn))]))
@@ -120,34 +123,6 @@ class Conv1D_AddAtt_Net(nn.Module):
 
         torch.nn.init.xavier_normal_(self.linear_out.weight)
         self.linear_out.bias.data.fill_(0.01)
-
-    def attention_pass_old(self, x_in, seq_lengths):  # x_in.shape: [bs, seq_len, in_size]
-        att_vector = self.linear_in_att(x_in) # [bs, seq_len, att_size]
-        att_hid_align = self.dropout_att(self.att_act(att_vector)) # [bs, seq_len, att_size]
-        att_score = self.linear_att(att_hid_align).squeeze(2) # [bs, seq_len]
-        mask = Conv1D_AddAtt_Net.length_to_negative_mask(seq_lengths)
-        alpha = F.softmax(att_score + mask, dim=1) # [bs, seq_len]
-        att = alpha.unsqueeze(2) # [bs, seq_len, 1]
-        return torch.sum(x_in * att, dim=1), alpha # [bs, in_size]
-
-    @staticmethod
-    def length_to_negative_mask(length, max_len=None, dtype=None):
-        """length: B.
-        return B x max_len.
-        If max_len is None, then max of length will be used.
-        """
-        if len(length.shape) != 1: # 'Length shape should be 1 dimensional.'
-            length = length.squeeze()
-
-        assert len(length.shape) == 1
-        max_len = max_len or int(length.max().item())
-        mask = torch.arange(max_len, device=length.device,
-                            dtype=length.dtype).expand(len(length), max_len) < length.unsqueeze(1)
-        mask = mask.float()
-        if dtype is not None:
-            mask = torch.as_tensor(mask, dtype=dtype, device=length.device)
-        mask = (mask - 1) * 10e6
-        return mask
 
     def forward(self, x, seq_lengths):
         x = self.in_layer(x)

@@ -19,6 +19,7 @@ sys.dont_write_bytecode = True
 from models.fnn_STD import FNN_Net
 from models.conv1d_addatt_STD import Conv1D_AddAtt_Net
 from models.conv1d_STD import Conv1D_Net
+from models.addatt_STD import AddAtt_Net
 from config_model import ConfigModel, ParamsModel
 from train_model import Train_NeuralNet
 from prediction import Prediction_NeuralNet
@@ -60,6 +61,8 @@ class Compile_Model:
             return Conv1D_Net
         elif model_type == "fnn":
             return FNN_Net
+        elif model_type == "additiveatt":
+            return AddAtt_Net
         else:
             raise ValueError("Only additive is allowed at the moment")
 
@@ -68,10 +71,22 @@ class Compile_Model:
             self.set_model_conv1d_additiveatt()
         elif self.model_name == "conv1d":
             self.set_model_conv1d()
+        elif self.model_name == "additiveatt":
+            self.set_model_additiveatt()
         elif self.model_name == "fnn":
             self.set_model_fnn()
         else:
             raise KeyError("The model {} is not settled".format(self.model_name))
+
+    def set_model_additiveatt(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
+                        num_of_class=self.config.model_parameters["out_dim"],
+                        nodes_fnn=self.config.model_parameters["model_structure"]["fnn_dim"],
+                        dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
+                        dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
+                        dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
+                        batch_norm=self.config.model_parameters["batch_norm"],
+                        layer_norm=self.config.model_parameters["layer_norm"])
 
     def set_model_fnn(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -224,7 +239,8 @@ class Compile_Model:
                             warmup_period=self.config.train_parameters["warm_up"],
                             early_stopping=self.config.train_parameters["early_stopping"],
                             keep_model=self.config.train_parameters["save_model"])
-     
+        print("config", self.config.train_parameters["save_model"])
+        print("best_model", best_model)
 
         self.config.model_parameters["train_status"] = "Done"
 
@@ -268,9 +284,16 @@ class Compile_Model:
         test_instance = Test_NeuralNet(network=self.model, configuration=self.config,
                             mixed_precision=self.config.train_parameters["mix_prec"], results_dir=self.results_dir,
                             results_module=self.results_model)
+        if self.model_name == "conv1d_additiveatt" or self.model_name == "additiveatt":
+            report_att = True
+        else:
+            report_att = False
+
         test_instance(test_dataset=pred_dataset, asynchronity=self.config.train_parameters["asynchronity"],
                             num_workers=self.config.train_parameters["num_workers"],
-                            batch_size=self.config.model_parameters["batch_size"], report_att=True)
+                            bucketing=self.config.train_parameters["bucketing"],
+                            stratified=self.config.train_parameters["stratified"],
+                            batch_size=self.config.model_parameters["batch_size"], report_att=report_att)
 
 
 
@@ -290,12 +313,9 @@ if __name__ == "__main__":
         best_model = compiled_model.train_model()
         config.save_data("{}/config_file.json".format(compiled_model.results_dir))
     if model_arguments.predict:
-        compiled_model.load_model("/work3/alff/results_pathogenfinder2/model_train_bucketing_07-08-2024_12-56-21")
-#        compiled_model.load_model(compiled_model.results_dir)
+        compiled_model.load_model(compiled_model.results_dir)
         compiled_model.predict_model()
     if model_arguments.test:
-        compiled_model.results_dir = "/work3/alff/results_pathogenfinder2/model_train_bucketing_07-08-2024_15-12-45/"
         compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
-#        compiled_model.load_model("/work3/alff/results_pathogenfinder2/model_train_bucketing_07-08-2024_12-56-21")
         compiled_model.test_model()
 

@@ -20,7 +20,7 @@ class Wandb_Results:
                                config=configuration, dir=wandb_dir)
 
     def start_train_report(self, model, criterion, log="all"):
-        self.wandb_run.watch(model, criterion, log="all", log_freq=Wandb_Results.batch_checkpoint)
+        self.wandb_run.watch(model, criterion, log="all", log_freq=1)
         self.step_wandb = 0
         self.epoch_n = 0
 
@@ -37,6 +37,8 @@ class Wandb_Results:
         if batch_n % Json_Results.batch_checkpoint == Json_Results.batch_checkpoint-1 and self.wandb_run:
             wandb.log({"Training Loss/Step": loss_train, "Learning Rate": lr, "Epoch": self.epoch_n + ((batch_n+1)/len_dataloader)}, step=self.step_wandb)
             self.step_wandb += 1
+#            self.step_wandb += Wandb_Results.batch_checkpoint
+
 
     def add_time_info(self, epoch_duration):
         wandb.log({"Epoch Runtime (seconds)": epoch_duration}, step=self.step_wandb)

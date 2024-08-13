@@ -67,14 +67,12 @@ class Attention_Methods(nn.Module):
 
 
 
-class Conv1D_AddAtt_Net(nn.Module):
+class AddAtt_Net(nn.Module):
 
     def __init__(self, input_dim=1024, num_of_class=1,
                  nodes_fnn=50, dropout_fnn=0.3, dropout_att=0.3,
                  dropout_in=0.4, batch_norm=False, layer_norm=False, attention_type="Bahdanau"):
-        super(Conv1D_AddAtt_Net, self).__init__()
-        
-        assert len(kernel_sizes) == len(conv_channels)
+        super(AddAtt_Net, self).__init__()
 
         if batch_norm:
             self.in_layer = nn.Sequential(OrderedDict([

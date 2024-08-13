@@ -247,7 +247,7 @@ class Train_NeuralNet():
                 #  clean gpu (maybe unnecessary
                 count += 1
         loss_pass = loss_pass/count
-        mcc_pass = loss_pass/count
+        mcc_pass = mcc_pass/count
         if last_epoch:
             return loss_lst, mcc_lst, att_results, profiler
         else:
@@ -290,7 +290,8 @@ class Train_NeuralNet():
             print(f'Epoch {epoch+1}/{epochs}') 
             start_e_time = time.time()
             #  training
-            loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping, asynchronity=asynchronity)
+            with torch.autograd.set_detect_anomaly(True):
+                loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping, asynchronity=asynchronity)
 
             #  validation
             print('validating...')
