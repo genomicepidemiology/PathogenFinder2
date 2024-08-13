@@ -7,18 +7,18 @@ from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
 from collections import OrderedDict
 
 class Attention_Methods(nn.Module):
-    def __init__(self, dimensions_in, attention_type="Bahdanau", dropout=0.0, init_weights=None):
+    def __init__(self, dimensions_in, attention_dim, attention_type="Bahdanau", dropout=0.0):
         super(Attention_Methods, self).__init__()
         self.dimensions_in = dimensions_in
         self.attention_type = attention_type
 
         # Linear transformations for Q, K, V from the same source
-        self.k_w = nn.Linear(dimensions_in, dimensions_in)
-        self.q_w = nn.Linear(dimensions_in, dimensions_in)
+        self.k_w = nn.Linear(dimensions_in, attention_dim)
+        self.q_w = nn.Linear(dimensions_in, attention_dim)
         
         self.dropout = nn.Dropout(dropout)
         if attention_type == "Bahdanau":
-            self.score_proj = nn.Linear(dimensions_in, 1, bias=True)
+            self.score_proj = nn.Linear(attention_dim, 1, bias=True)
         else:
             self.score_proj = None
 
@@ -51,7 +51,6 @@ class Attention_Methods(nn.Module):
         return mask
 
     def forward(self, x_in, mask):
-#        mask = Attention_Methods.create_mask(seq_lengths=seq_lengths, dimensions_batch=x_in.shape)
 
         query = self.q_w(x_in)
         key = self.k_w(x_in)
@@ -73,7 +72,7 @@ class Attention_Methods(nn.Module):
 class Conv1D_AddAtt_Net(nn.Module):
 
     def __init__(self, input_dim=1024, conv_channels=[1024*4, 1024*2,100], num_of_class=1,
-                 kernel_sizes=[5,3,3], stride=1, nodes_fnn=50,
+                 kernel_sizes=[5,3,3], stride=1, nodes_fnn=50, attention_dim=512,
                  dropout_conv=0.2, dropout_fnn=0.3, dropout_att=0.3,
                  dropout_in=0.4, batch_norm=False, layer_norm=False, attention_type="Bahdanau"):
         super(Conv1D_AddAtt_Net, self).__init__()
@@ -100,7 +99,8 @@ class Conv1D_AddAtt_Net(nn.Module):
        
         self.attention_layer = Attention_Methods(attention_type=attention_type,
 							dimensions_in=conv_channels[-1],
-                                                        dropout=dropout_att)
+                                                        attention_dim=attention_dim,
+							dropout=dropout_att)
         self.linear_1 = nn.Sequential(OrderedDict([
             ("linear", nn.Linear(conv_channels[-1], nodes_fnn)),
             ("batch_norm", nn.BatchNorm1d(nodes_fnn)),

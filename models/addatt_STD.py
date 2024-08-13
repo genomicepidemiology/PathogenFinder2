@@ -7,18 +7,18 @@ from torch.optim.lr_scheduler import LambdaLR,SequentialLR, OneCycleLR
 from collections import OrderedDict
 
 class Attention_Methods(nn.Module):
-    def __init__(self, dimensions_in, attention_type="Bahdanau", dropout=0.0, init_weights=None):
+    def __init__(self, dimensions_in, attention_dim, attention_type="Bahdanau", dropout=0.0):
         super(Attention_Methods, self).__init__()
         self.dimensions_in = dimensions_in
         self.attention_type = attention_type
 
         # Linear transformations for Q, K, V from the same source
-        self.k_w = nn.Linear(dimensions_in, dimensions_in)
-        self.q_w = nn.Linear(dimensions_in, dimensions_in)
+        self.k_w = nn.Linear(dimensions_in, attention_dim)
+        self.q_w = nn.Linear(dimensions_in, attention_dim)
         
         self.dropout = nn.Dropout(dropout)
         if attention_type == "Bahdanau":
-            self.score_proj = nn.Linear(dimensions_in, 1, bias=True)
+            self.score_proj = nn.Linear(attention_dim, 1, bias=True)
         else:
             self.score_proj = None
 
@@ -70,7 +70,7 @@ class Attention_Methods(nn.Module):
 class AddAtt_Net(nn.Module):
 
     def __init__(self, input_dim=1024, num_of_class=1,
-                 nodes_fnn=50, dropout_fnn=0.3, dropout_att=0.3,
+                 nodes_fnn=50, dropout_fnn=0.3, dropout_att=0.3, attention_dim=512,
                  dropout_in=0.4, batch_norm=False, layer_norm=False, attention_type="Bahdanau"):
         super(AddAtt_Net, self).__init__()
 
@@ -85,6 +85,7 @@ class AddAtt_Net(nn.Module):
             ]))
        
         self.attention_layer = Attention_Methods(attention_type=attention_type,
+                                                        attention_dim=attention_dim,
 							dimensions_in=input_dim,
                                                         dropout=dropout_att)
         self.linear_1 = nn.Sequential(OrderedDict([

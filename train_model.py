@@ -290,8 +290,8 @@ class Train_NeuralNet():
             print(f'Epoch {epoch+1}/{epochs}') 
             start_e_time = time.time()
             #  training
-            with torch.autograd.set_detect_anomaly(True):
-                loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping, asynchronity=asynchronity)
+ #           with torch.autograd.set_detect_anomaly(True):
+            loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping, asynchronity=asynchronity)
 
             #  validation
             print('validating...')

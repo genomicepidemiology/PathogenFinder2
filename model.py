@@ -85,6 +85,7 @@ class Compile_Model:
                         dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
                         dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
                         dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
+                        attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
                         batch_norm=self.config.model_parameters["batch_norm"],
                         layer_norm=self.config.model_parameters["layer_norm"])
 
@@ -110,6 +111,7 @@ class Compile_Model:
                         num_of_class=self.config.model_parameters["out_dim"],
                         kernel_sizes=self.config.model_parameters["model_structure"]["kernels"], stride=1,
                         nodes_fnn=self.config.model_parameters["model_structure"]["fnn_dim"],
+                        attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
                         dropout_conv=self.config.model_parameters["model_structure"]["conv_dropout"],
                         dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
                         dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
