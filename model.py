@@ -20,6 +20,10 @@ from models.fnn_STD import FNN_Net
 from models.conv1d_addatt_STD import Conv1D_AddAtt_Net
 from models.conv1d_STD import Conv1D_Net
 from models.addatt_STD import AddAtt_Net
+from models.densenet_STD import DenseNet_Net
+from models.densenet_addatt_STD import DenseNet_AddAtt_Net
+
+
 from config_model import ConfigModel, ParamsModel
 from train_model import Train_NeuralNet
 from prediction import Prediction_NeuralNet
@@ -48,6 +52,7 @@ class Compile_Model:
         self.model_carcass = self.get_model_carcass(model_type=self.model_name)
 
         self.set_model()
+        print(self.model)
 
         self.results_dir = NNUtils.set_results_files(
 				results_dir=self.config.train_parameters["results_dir"])
@@ -63,6 +68,10 @@ class Compile_Model:
             return FNN_Net
         elif model_type == "additiveatt":
             return AddAtt_Net
+        elif model_type == "densenet":
+            return DenseNet_Net
+        elif model_type == "densenet_additiveatt":
+            return DenseNet_AddAtt_Net
         else:
             raise ValueError("Only additive is allowed at the moment")
 
@@ -75,8 +84,36 @@ class Compile_Model:
             self.set_model_additiveatt()
         elif self.model_name == "fnn":
             self.set_model_fnn()
+        elif self.model_name == "densenet":
+            self.set_model_densenet()
+        elif self.model_name == "densenet_additiveatt":
+            self.set_model_densenet_additiveatt()
         else:
-            raise KeyError("The model {} is not settled".format(self.model_name))
+           raise KeyError("The model {} is not settled".format(self.model_name))
+
+    def set_model_densenet_additiveatt(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
+                                        num_of_class=self.config.model_parameters["out_dim"],
+                                        num_blocks=self.config.model_parameters["model_structure"]["num_blocks"],
+					kernel_sizes=self.config.model_parameters["model_structure"]["kernels"],
+		                        conv_channels=self.config.model_parameters["model_structure"]["conv_channels"],
+                                        dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
+					factor_block=self.config.model_parameters["model_structure"]["factor_block"],
+		                        nodes_fnn=self.config.model_parameters["model_structure"]["fnn_dim"],
+                		        dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
+		                        dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
+		                        attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
+		                        batch_norm=self.config.model_parameters["batch_norm"],
+		                        layer_norm=self.config.model_parameters["layer_norm"])
+
+    def set_model_densenet(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
+                                        num_of_class=self.config.model_parameters["out_dim"],
+                                        num_blocks=self.config.model_parameters["model_structure"]["num_blocks"],
+                                        kernel_sizes=self.config.model_parameters["model_structure"]["kernels"],
+                                        conv_channels=self.config.model_parameters["model_structure"]["conv_channels"],
+                                        dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
+                                        factor_block=self.config.model_parameters["model_structure"]["factor_block"])
 
     def set_model_additiveatt(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -286,7 +323,7 @@ class Compile_Model:
         test_instance = Test_NeuralNet(network=self.model, configuration=self.config,
                             mixed_precision=self.config.train_parameters["mix_prec"], results_dir=self.results_dir,
                             results_module=self.results_model)
-        if self.model_name == "conv1d_additiveatt" or self.model_name == "additiveatt":
+        if self.model_name == "conv1d_additiveatt" or self.model_name == "additiveatt" or self.model_name == "densenet_additiveatt":
             report_att = True
         else:
             report_att = False

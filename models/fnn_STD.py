@@ -8,7 +8,7 @@ from collections import OrderedDict
 class FNN_Net(nn.Module):
 
 
-    def __init__(self, input_dim=1, nodes_fnn=10, dropout_fnn=0.3, num_of_class=1):
+    def __init__(self, input_dim, nodes_fnn, dropout_fnn, num_of_class):
         super(FNN_Net, self).__init__()
         
         self.linear_layer = nn.Sequential(OrderedDict([
