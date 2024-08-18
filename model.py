@@ -278,8 +278,6 @@ class Compile_Model:
                             warmup_period=self.config.train_parameters["warm_up"],
                             early_stopping=self.config.train_parameters["early_stopping"],
                             keep_model=self.config.train_parameters["save_model"])
-        print("config", self.config.train_parameters["save_model"])
-        print("best_model", best_model)
 
         self.config.model_parameters["train_status"] = "Done"
 

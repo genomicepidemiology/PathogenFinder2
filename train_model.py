@@ -139,16 +139,19 @@ class Train_NeuralNet():
         optimizer_dict[parameter].step()
         optimizer_dict[parameter].zero_grad()
     
-    def train_pass(self, train_loader, profiler=None, asynchronity=False, clipping=False):
+    def train_pass(self, train_loader, batch_size, profiler=None, asynchronity=False, clipping=False):
 
         loss_lst = []
-        mcc_lst = []
         lr_rate_lst = []
         loss_pass = 0.
         mcc_pass = 0.
         count = 0
-        len_dataloader = len(train_loader) 
+        len_dataloader = len(train_loader)
+        labels_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device, dtype=int)
+        pred_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device)
+
         for batch in tqdm(train_loader):
+            pos_first, pos_last = count, count+batch_size
             if self.profiler is not None:
                 self.profiler.step()
             embeddings = batch["Input"]
@@ -183,37 +186,34 @@ class Train_NeuralNet():
                 self.update_scheduler()          
             #  computing loss
             loss_c = loss.detach()
-            if torch.isnan(loss_c):
-                print("FILE WRONG: ", batch["File_Names"])
             pred_c = predictions.detach()
-            label_c = labels.detach()
+            labels = labels.detach()
+
+            labels_tensor[pos_first:pos_last,:] = labels
+            pred_tensor[pos_first:pos_last,:] = pred_c
+
             loss_pass += loss_c
-            mcc = Metrics.calculate_MCC(labels=label_c, predictions=pred_c, device=self.device)
-            mcc_pass += mcc
             self.results_training.add_step_info(loss_train=loss_c, lr=self.optimizer.param_groups[-1]['lr'], batch_n=count,
                                              len_dataloader=len_dataloader)
             #  clean gpu (maybe unnecessary)
-            count += 1
+            count += batch_size
         loss_pass = loss_pass/count
-        mcc_pass = mcc_pass/count
+        mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
         return loss_pass, mcc_pass, lr_rate_lst, profiler
 
-    def val_pass(self, val_loader, last_epoch=False, profiler=None, asynchronity=False):
+    def val_pass(self, val_loader, batch_size, profiler=None, asynchronity=False):
 
         loss_lst = []
-        mcc_lst = []
         
         loss_pass = 0.
-        mcc_pass = 0.
         count = 0
-
-        if last_epoch:
-            att_results = {"Genomes": [], "Proteins":[], "Attentions": []}
-        else:
-            att_results = None
+        len_dataloader = len(val_loader)
+        labels_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device, dtype=int)
+        pred_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device)
 
         with torch.inference_mode():
             for batch in tqdm(val_loader):
+                pos_first, pos_last = count, count+batch_size
                 if self.profiler is not None:
                     self.profiler.step()
                 embeddings = batch["Input"]
@@ -230,28 +230,19 @@ class Train_NeuralNet():
                 #  computing loss
                 loss_c = loss.detach()
                 pred_c = predictions.detach()
-                label_c = labels.detach()
+                labels = labels.detach()
                 loss_pass += loss_c
-                if torch.isnan(loss_c):
-                    print("FILE WRONG: ", batch["File_Names"])
-                mcc = Metrics.calculate_MCC(labels=label_c, predictions=pred_c, device=self.device)
-                mcc_pass += mcc
+    
+                labels_tensor[pos_first:pos_last,:] = labels
+                pred_tensor[pos_first:pos_last,:] = pred_c
 
-                if last_epoch:
-                    genome_names = batch["File_Names"]
-                    att_results["Genomes"].extend(genome_names)
-                    prot_names = batch["Protein_IDs"]
-                    att_results["Proteins"].extend(prot_names)
-                    attentions = attentions.detach().cpu().numpy()
-                    att_results["Attentions"].append(attentions)
                 #  clean gpu (maybe unnecessary
-                count += 1
+                count += batch_size
         loss_pass = loss_pass/count
-        mcc_pass = mcc_pass/count
-        if last_epoch:
-            return loss_lst, mcc_lst, att_results, profiler
-        else:
-            return loss_pass, mcc_pass, profiler
+
+        mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
+
+        return loss_pass, mcc_pass, profiler
 
     def best_epoch_retain(self, new_val, optimizer, model, epoch, loss):
         if self.saved_model["val_measure"] is None or self.saved_model["val_measure"] > new_val:
@@ -277,6 +268,7 @@ class Train_NeuralNet():
         val_loader = NN_Data.load_data(val_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing)
 
+
         steps = steps=len(train_loader)
         self.set_optimizer(epochs=epochs, steps=steps, optimizer=optimizer, learning_rate=learning_rate, 
                 weight_decay=weight_decay, lr_schedule=lr_schedule, end_lr=end_lr, amsgrad=amsgrad, fused_OptBack=fused_OptBack,
@@ -291,11 +283,11 @@ class Train_NeuralNet():
             start_e_time = time.time()
             #  training
             with torch.autograd.set_detect_anomaly(True):
-    	        loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, clipping=clipping, asynchronity=asynchronity)
-
+    	        loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, batch_size=batch_size,
+									clipping=clipping, asynchronity=asynchronity)
             #  validation
             print('validating...')
-            loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader, asynchronity=asynchronity)
+            loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader, asynchronity=asynchronity, batch_size=batch_size)
 
             self.results_training.add_epoch_info(epoch=epoch, loss_t=loss_train, loss_v=loss_val, 
                                                    mcc_t=mcc_t, mcc_v=mcc_v)
