@@ -140,15 +140,17 @@ class Train_NeuralNet():
         optimizer_dict[parameter].zero_grad()
     
     def train_pass(self, train_loader, batch_size, profiler=None, asynchronity=False, clipping=False):
-
+        
+        self.network.train()
+        
         loss_lst = []
         lr_rate_lst = []
         loss_pass = 0.
-        mcc_pass = 0.
         count = 0
         len_dataloader = len(train_loader)
         labels_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device, dtype=int)
         pred_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device)
+        batch_n = 0
 
         for batch in tqdm(train_loader):
             pos_first, pos_last = count, count+batch_size
@@ -193,15 +195,18 @@ class Train_NeuralNet():
             pred_tensor[pos_first:pos_last,:] = pred_c
 
             loss_pass += loss_c
-            self.results_training.add_step_info(loss_train=loss_c, lr=self.optimizer.param_groups[-1]['lr'], batch_n=count,
+            self.results_training.add_step_info(loss_train=loss_c, lr=self.optimizer.param_groups[-1]['lr'], batch_n=batch_n,
                                              len_dataloader=len_dataloader)
             #  clean gpu (maybe unnecessary)
             count += batch_size
-        loss_pass = loss_pass/count
+            batch_n += 1
+        loss_pass = loss_pass/batch_n
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
         return loss_pass, mcc_pass, lr_rate_lst, profiler
 
     def val_pass(self, val_loader, batch_size, profiler=None, asynchronity=False):
+
+        self.network.eval()
 
         loss_lst = []
         
@@ -210,6 +215,7 @@ class Train_NeuralNet():
         len_dataloader = len(val_loader)
         labels_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device, dtype=int)
         pred_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device)
+        batch_n = 0 
 
         with torch.inference_mode():
             for batch in tqdm(val_loader):
@@ -237,15 +243,17 @@ class Train_NeuralNet():
                 pred_tensor[pos_first:pos_last,:] = pred_c
 
                 #  clean gpu (maybe unnecessary
+                batch_n += 1
                 count += batch_size
-        loss_pass = loss_pass/count
+        loss_pass = loss_pass/batch_n
 
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
 
         return loss_pass, mcc_pass, profiler
 
     def best_epoch_retain(self, new_val, optimizer, model, epoch, loss):
-        if self.saved_model["val_measure"] is None or self.saved_model["val_measure"] > new_val:
+        if self.saved_model["val_measure"] is None or self.saved_model["val_measure"] < new_val:
+            print("SAVED")
             return {"epoch": epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
                                 'loss': loss, "val_measure": new_val}
         else:
@@ -266,7 +274,7 @@ class Train_NeuralNet():
         train_loader = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
         val_loader = NN_Data.load_data(val_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing)
+                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
 
 
         steps = steps=len(train_loader)
@@ -282,8 +290,8 @@ class Train_NeuralNet():
             print(f'Epoch {epoch+1}/{epochs}') 
             start_e_time = time.time()
             #  training
-            with torch.autograd.set_detect_anomaly(True):
-    	        loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, batch_size=batch_size,
+#            with torch.autograd.set_detect_anomaly(True):
+            loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, batch_size=batch_size,
 									clipping=clipping, asynchronity=asynchronity)
             #  validation
             print('validating...')
@@ -299,7 +307,7 @@ class Train_NeuralNet():
                 self.update_scheduler(value=loss_val)
             end_e_time = time.time()
             self.results_training.add_time_info(end_e_time-start_e_time)
-            print("training_loss: {}, validation_loss: {}".format(loss_train, loss_val))
+            print("training_loss: {}, validation_loss: {} // training_mcc: {}, validation_mcc: {} ".format(loss_train, loss_val, mcc_t, mcc_v))
             if early_stopping:
                 stop = early_stopping_method(val_measure=mcc_v)
                 if stop:

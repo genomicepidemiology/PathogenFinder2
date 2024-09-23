@@ -9,11 +9,15 @@ import models.layers.utils as utils
 class Conv1D_Net(nn.Module):
 
     def __init__(self, input_dim, num_of_class, kernel_sizes, conv_channels,
-                 dropout_conv, dropout_in, batch_norm, layer_norm=False, stride=1):
+                 dropout_conv, dropout_in, norm, stride=1):
         super(Conv1D_Net, self).__init__()
 
-        if batch_norm:
-            dropout_conv = 0
+        if norm == "Batch":
+            norm_module = nn.BatchNorm1d
+        elif norm == "Layer":
+            norm_module = nn.LayerNorm
+        else:
+            norm_module = False
 
         self.in_layer = nn.Sequential(OrderedDict([
                 ("drop_in", nn.Dropout1d(dropout_in))]))
@@ -21,18 +25,17 @@ class Conv1D_Net(nn.Module):
         self.conv1d_layers = nn.ModuleList()
 
         for kernel, dim, in zip(kernel_sizes, conv_channels):
-            layer_conv = nn.Sequential(OrderedDict([
-            ("conv1d", nn.Conv1d(input_dim, dim,
-                        kernel_size=kernel,
-                        stride=1, padding=kernel//2)),
-            ("batch_norm", nn.BatchNorm1d(dim)),
-            ("activation", nn.ReLU()),
-            ("dropout", nn.Dropout1d(dropout_conv))]))
-            self.conv1d_layers.append(layer_conv)
-            input_dim = dim
+            layer_conv = OrderedDict([])
+            layer_conv["conv1d"] = nn.Conv1d(input_dim, dim,
+                                                kernel_size=kernel,
+                                                stride=1, padding=kernel//2)
+            if norm_module:
+                layer_conv["norm"] = norm_module(dim)
 
-            if not batch_norm:
-                del layer_conv[1]
+            layer_conv["activation"] = nn.ReLU()
+            layer_conv["dropout"] = nn.Dropout1d(dropout_conv)
+            self.conv1d_layers.append(nn.Sequential(layer_conv))
+            input_dim = dim
 
         self.linear_out = nn.Linear(input_dim, num_of_class)
 

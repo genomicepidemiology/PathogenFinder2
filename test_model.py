@@ -38,20 +38,39 @@ class Test_NeuralNet:
         self.results_dir = results_dir
         self.results_module = results_module
 
-    def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att, bucketing, stratified):
+    @staticmethod
+    def get_activation(name):
+        def hook(model, input, output):
+            activation[name] = output.detach()
+        return hook
+
+
+    def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att, bucketing, stratified, return_layer=False):
 
         start_time = time.time()
 
         test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=stratified,
-                                             shuffle=True, pin_memory=asynchronity, bucketing=bucketing, drop_last=False)
+                                             shuffle=True, pin_memory=asynchronity, bucketing=bucketing, drop_last=True)
         predictions_lst = []
         labels_lst = []
         lengths_lst = []
         filenames_lst = []
+
+        features_lst = []
         
         
         if report_att and not os.path.isdir("{}/attention_vals_test".format(self.results_dir)):
             os.mkdir("{}/attention_vals_test".format(self.results_dir))
+
+        self.network.eval()
+        activation = {}
+        def get_activation(name):
+            def hook(model, input, output):
+                activation[name] = output.detach()
+            return hook
+
+        if return_layer:
+            self.network.avgpool.register_forward_hook(get_activation("{}".format(return_layer)))
 
         with torch.inference_mode():
             for batch in tqdm(test_loader):
@@ -69,9 +88,11 @@ class Test_NeuralNet:
                 lengths = lengths.to(self.device, non_blocking=asynchronity)
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
-                predictions = torch.sigmoid(predictions_logit)
+                predictions, loss = self.calculate_loss(predictions_logit, labels)
 
                 predictions_lst.extend(predictions.to("cpu").reshape(len(predictions,)).tolist())
+                features_lst.append(activation["{}".format(return_layer)].cpu().numpy())
+
                 if report_att:
                     attentions = attentions.to("cpu")
                     for filename_, attentions_, prot_name_ in zip(filename, attentions, prot_name):
@@ -80,13 +101,16 @@ class Test_NeuralNet:
                         np.savez_compressed("{}/attention_vals_test/{}".format(self.results_dir, os.path.basename(filename_)),
                                             attentions=attentions_, protein_IDs=prot_name_)
         exec_time = time.time() - start_time
+        features = np.concatenate(features_lst)
+        np.savez_compressed("{}/features".format(self.results_dir), return_layer=features)
+
         results_df = pd.DataFrame({"Filename": filenames_lst, "Protein_Count": lengths_lst,
 					"Correct Label": labels_lst, "Predictions": predictions_lst})
         results_df["Predictions (Label)"] = 0
         results_df.loc[results_df["Predictions"]>0.5, "Predictions (Label)"] = 1
         results_df.to_csv("{}/predictions_test.tsv".format(self.results_dir), sep="\t", index=False)
 
-        metrics = self.calculate_metrics(results_df=results_df, bootstrap=20)
+        metrics = self.calculate_metrics(results_df=results_df, bootstrap=1)
 
         with open("{}/results_test.txt".format(self.results_dir), "w") as res_file:
             res_file.write("Test Results File\n")
@@ -97,6 +121,7 @@ class Test_NeuralNet:
                 self.results_module.test_results(k, val["Mean"], val["Std"])
             res_file.write("Exec time: {}\n".format(exec_time))
             self.results_module.test_results("Exec time", exec_time, None)
+            self.results_module.test_results("Loss", loss,None)
 
         cm_display, roc_display, pr_display, det_display = self.get_graphs(data=results_df)
 
@@ -109,6 +134,11 @@ class Test_NeuralNet:
 #        self.make_graph(display=det_display, name_file="det",
  #                      title="DET")
 
+    def calculate_loss(self, predictions_logit, labels):
+        predictions = torch.sigmoid(predictions_logit)
+        loss = torch.nn.modules.loss.BCEWithLogitsLoss()(predictions_logit, labels)
+        return predictions, loss
+
     def make_graph(self, display, name_file, title):
         fig, ax = plt.subplots()
         display.plot(ax=ax)
@@ -116,8 +146,6 @@ class Test_NeuralNet:
         plt.savefig("{}/{}.png".format(self.results_dir, name_file))
         self.results_module.log_plot(fig=fig, name=title)
         plt.close()
-
-
 
     def get_graphs(self, data):
         y_test = data["Correct Label"]

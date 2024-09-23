@@ -80,14 +80,14 @@ class ConfigModel:
         model_parameters = ParamsModel(name_params="Model Parameters")
         model_parameters.init_params(
                 list_params=["batch_size", "model_name", "model_structure",  "out_dim", "out_init",
-                    "out_sigmoid", "batch_norm", "layer_norm", "train_status", "saved_model", 
+                    "out_sigmoid", "norm", "train_status", "saved_model", 
                     "mode", "input_dim", "input_type"])
         return model_parameters
 
     def init_train_parameters(self):
         train_parameters = ParamsModel(name_params="Train Parameters")
         train_parameters.init_params(
-                list_params=["optimizer", "learning_rate",
+                list_params=["optimizer", "learning_rate","norm_scale", "stochastic_depth_prob",
                     "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
                     "weight_decay", "lr_end", "fused_OptBack", "clipping", "num_workers",
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",

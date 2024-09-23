@@ -9,7 +9,7 @@ class Bottleneck(nn.Module):
     # while original implementation places the stride at the first 1x1 convolution(self.conv1)
     # according to "Deep residual learning for image recognition"https://arxiv.org/abs/1512.03385
 
-    def __init__(self, in_dim, out_dim, factor_bottle=2, kernel=3, groups=1):
+    def __init__(self, in_dim, out_dim, norm, factor_bottle=2, kernel=3, groups=1):
         super(Bottleneck, self).__init__()
 
         self.in_dim = in_dim
@@ -18,17 +18,17 @@ class Bottleneck(nn.Module):
 
         # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = nn.Conv1d(in_dim, middle_dim, kernel_size=1, padding=0, bias=False)
-        self.bn1 = nn.BatchNorm1d(middle_dim)
+        self.bn1 = norm(middle_dim)
         self.conv2 = nn.Conv1d(middle_dim, middle_dim, kernel_size=kernel, padding=kernel//2, groups=groups, bias=False)
-        self.bn2 = nn.BatchNorm1d(middle_dim)
+        self.bn2 = norm(middle_dim)
         self.conv3 = nn.Conv1d(middle_dim, out_dim, kernel_size=1, padding=0, bias=False)
-        self.bn3 = nn.BatchNorm1d(out_dim)
+        self.bn3 = norm(out_dim)
         self.relu = nn.ReLU(inplace=False)
 
         if in_dim != out_dim:
             self.downsample = nn.Sequential(
                                         nn.Conv1d(self.in_dim, self.out_dim, kernel_size=1, bias=False),
-                                        nn.BatchNorm1d(self.out_dim))
+                                        norm(self.out_dim))
         else:
             self.downsample = None
 

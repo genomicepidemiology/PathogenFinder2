@@ -11,11 +11,19 @@ from models.layers.denseblock import Bottleneck
 class DenseNet_Net(nn.Module):
 
     def __init__(self, input_dim, num_of_class, num_blocks, kernel_sizes,
-			conv_channels, dropout_in, factor_block, stride=1):
+			conv_channels, dropout_in, factor_block, norm, stride=1):
         super(DenseNet_Net, self).__init__()
+
         assert len(kernel_sizes) == len(conv_channels)
         assert num_blocks == len(kernel_sizes)
 
+        if norm == "Batch":
+            norm_module = nn.BatchNorm1d
+        elif norm == "Layer":
+            norm_module = nn.LayerNorm
+        else:
+            norm_module = False
+       
         self.in_layer = nn.Sequential(OrderedDict([
                 ("drop_in", nn.Dropout1d(dropout_in))]))
 
@@ -25,7 +33,7 @@ class DenseNet_Net(nn.Module):
             k_size = kernel_sizes[n_block]
             c_conv = conv_channels[n_block]
             block = Bottleneck(in_dim=input_dim, out_dim=c_conv, factor_bottle=factor_block,
-				kernel=k_size)
+				kernel=k_size, norm=norm_module)
             self.dense_blocks.append(block)
             input_dim = c_conv
 

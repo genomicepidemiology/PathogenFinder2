@@ -182,6 +182,31 @@ class ProteomeDataset(Dataset):
         return embeddings, len_proteome, protein_names
 
     @staticmethod
+    def collate_individual(batch):
+        '''
+        Padds batch of variable length
+
+        note: it converts things ToTensor manually here since the ToTensor transform
+        assume it takes in images rather than arbitrary tensors.
+        '''
+        ## get sequence lengths
+        data = {"Input": None, "Masks": None,
+                "Protein Count": None,
+                "PathoPhenotype": None,
+                "Protein_IDs": [], "File_Names": []
+                }
+
+        for i, b in enumerate(batch):
+            data["Protein Count"] = torch.from_numpy(np.array([b["Protein Count"]]))
+            data["PathoPhenotype"] = torch.from_numpy(np.array(b["Label"]))
+            data["File_Names"].append(b["File_Name"])
+            data["Protein_IDs"].append(b["Protein_IDs"])
+            data["Input"] = torch.from_numpy(np.array([b["Input"]]))
+            data["Mask"] = torch.zeros(1,len(b["Input"]))
+
+        return data
+
+    @staticmethod
     def collate_fn_mask(batch):
         '''
         Padds batch of variable length
@@ -320,7 +345,9 @@ class BucketSampler(Sampler):
         list_batches = list(np.unique(index_info[:,2]))
         random.shuffle(list_batches)
         for b in list_batches:
-            yield index_info[index_info[:,2]==b,0].T
+            batch_out = index_info[index_info[:,2]==b,0].T
+            np.random.shuffle(batch_out)
+            yield batch_out
 
     def __len__(self):
         return self.amount_batches
@@ -380,15 +407,19 @@ class NN_Data:
     @staticmethod
     def load_data(data_set, batch_size, num_workers=4, shuffle=True, pin_memory=False,
                   bucketing=None, stratified=False, drop_last=True):
+        if batch_size > 1:
+            collate_fn = ProteomeDataset.collate_fn_mask
+        else:
+            collate_fn = ProteomeDataset.collate_individual
         if bucketing:
             bucketing_sampler = BucketSampler(data_set.landmarks_frame, batch_size=batch_size,
                                               num_buckets=bucketing, stratified=stratified, drop_last=True)
             data_loader = DataLoader(data_set, num_workers=num_workers,
-                              collate_fn=ProteomeDataset.collate_fn_mask, batch_sampler=bucketing_sampler,
+                              collate_fn=collate_fn, batch_sampler=bucketing_sampler,
                               persistent_workers=False, pin_memory=pin_memory)
         else:
             data_loader = DataLoader(data_set, batch_size=batch_size, num_workers=num_workers,
-                              collate_fn=ProteomeDataset.collate_fn_mask, drop_last=drop_last,
+                              collate_fn=collate_fn, drop_last=drop_last,
                               shuffle=shuffle, persistent_workers=False, pin_memory=pin_memory)
 
         return data_loader
@@ -417,7 +448,7 @@ class SimilarityBootstrap(Sampler):
 if __name__ == '__main__':
     from collections import Counter
     import matplotlib.pyplot as plt
-    import seaborn as sns
+ #   import seaborn as sns
 
     def calculate_intradistance(batch):
         distances = []
@@ -454,29 +485,30 @@ if __name__ == '__main__':
         #print(pd.DataFrame.from_dict(distances_batch, orient='columns'))
 
 
-
+ #   ProteomeDataset.open_embedfile("/ceph/hpc/data/d2023d12-072-users/dataset20000_orig/embedding_files/all_files/GCF_003/GCF_003709045.1_ASM370904v1_genomic.h5")
+  #  exit()
     batch_size = 64
     distances_batch_old = {"Bucketing":{"Max":[], "Mean":[], "Std":[]},
                         "Bucketing & Stratified":{"Max":[], "Mean":[], "Std":[]},
                         "Standard":{"Max":[], "Mean":[], "Std":[]}}
     distances_batch = []
-    dataset = ProteomeDataset(csv_file="../metadata/METADATA_completeDF_protLim.tsv",
-	                root_dir="/work3/alff/embeddings/data/",
+    dataset = ProteomeDataset(csv_file="/ceph/hpc/data/d2023d12-072-users/dataset20000_orig/metadata/METADATA_valDF_protLim_phageclean.tsv",
+	                root_dir="/ceph/hpc/data/d2023d12-072-users/dataset20000_orig/embedding_files/all_files/",
 			transform=transforms.Compose([PhenotypeInteger(prediction="Single")]), load_data=False)
-    bucketing_sampler = BucketSampler(dataset.landmarks_frame, batch_size=batch_size, num_buckets=12, random_buckets=False,
+    bucketing_sampler = BucketSampler(dataset.landmarks_frame, batch_size=batch_size, num_buckets=12, random_buckets=True,
                                      stratified=True, drop_last=True)
-    weight_counts = {"Patho":[], "Non-patho":[]}
-    count = 0
-    for d in tqdm(bucketing_sampler.get_buckets()):
-        counts = dict(Counter(d["PathoPhenotype"].squeeze().tolist()))
-        weight_counts["Patho"].append(counts["Pathogenic"])
-        try:
-            weight_counts["Non-patho"].append(counts["No Pathogenic"])
-        except KeyError:
-            weight_counts["Non-patho"].append(0.)
-    batch_graphs(weight_counts, title="Percentatge phenotype per bucket (stratified)", filename="bucket_stratified")
+#    weight_counts = {"Patho":[], "Non-patho":[]}
+ #   count = 0
+#    for d in tqdm(bucketing_sampler.get_buckets()):
+ #       counts = dict(Counter(d["PathoPhenotype"].squeeze().tolist()))
+  #      weight_counts["Patho"].append(counts["Pathogenic"])
+   #     try:
+    #        weight_counts["Non-patho"].append(counts["No Pathogenic"])
+     #   except KeyError:
+      #      weight_counts["Non-patho"].append(0.)
+#    batch_graphs(weight_counts, title="Percentatge phenotype per bucket (stratified)", filename="bucket_stratified")
     load_data = DataLoader(dataset,num_workers=1,
-				collate_fn=ProteomeDataset.collate_fn_mask,
+				collate_fn=ProteomeDataset.collate_fn_mask, stratified=True,
                                 batch_sampler=bucketing_sampler, persistent_workers=False, pin_memory=False)
 
     weight_counts = {"Patho":[], "Non-patho":[]}

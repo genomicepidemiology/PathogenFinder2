@@ -19,8 +19,14 @@ class Wandb_Results:
         self.wandb_run = wandb.init(project="PathogenFinder2", name=name,
                                config=configuration, dir=wandb_dir)
 
+    def count_params(self, model):
+        pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        return pytorch_total_params
+
     def start_train_report(self, model, criterion, log="all"):
         self.wandb_run.watch(model, criterion, log="all", log_freq=1)
+        model_params = self.count_params(model)
+        self.wandb_run.summary["Trainable parameters"] = model_params
         self.step_wandb = 0
         self.epoch_n = 0
 
@@ -28,13 +34,14 @@ class Wandb_Results:
 
         log_results = {"Training Loss": loss_t,
                    "Validation Loss": loss_v, "Training MCC": mcc_t,
-                   "Validation MCC": mcc_v,
+                   "Validation MCC": mcc_v, "Epoch": epoch
                    }
+ #       print(log_reults)
         wandb.log(log_results, step=self.step_wandb)
         self.epoch_n += 1
 
     def add_step_info(self, loss_train, lr, batch_n, len_dataloader):
-        if batch_n % Json_Results.batch_checkpoint == Json_Results.batch_checkpoint-1 and self.wandb_run:
+        if batch_n % Wandb_Results.batch_checkpoint == Json_Results.batch_checkpoint-1 and self.wandb_run:
             wandb.log({"Training Loss/Step": loss_train, "Learning Rate": lr, "Epoch": self.epoch_n + ((batch_n+1)/len_dataloader)}, step=self.step_wandb)
             self.step_wandb += 1
 #            self.step_wandb += Wandb_Results.batch_checkpoint

@@ -22,6 +22,8 @@ from models.conv1d_STD import Conv1D_Net
 from models.addatt_STD import AddAtt_Net
 from models.densenet_STD import DenseNet_Net
 from models.densenet_addatt_STD import DenseNet_AddAtt_Net
+from models.convnext_STD import ConvNeXt_Net
+from models.convnext_addatt_STD import ConvNet_AddAtt_Net
 
 
 from config_model import ConfigModel, ParamsModel
@@ -72,6 +74,10 @@ class Compile_Model:
             return DenseNet_Net
         elif model_type == "densenet_additiveatt":
             return DenseNet_AddAtt_Net
+        elif model_type == "convnext":
+            return ConvNeXt_Net
+        elif model_type == "convnext_additiveatt":
+            return ConvNet_AddAtt_Net
         else:
             raise ValueError("Only additive is allowed at the moment")
 
@@ -88,8 +94,33 @@ class Compile_Model:
             self.set_model_densenet()
         elif self.model_name == "densenet_additiveatt":
             self.set_model_densenet_additiveatt()
+        elif self.model_name == "convnext":
+            self.set_model_convnext()
+        elif self.model_name == "convnext_additiveatt":
+            self.set_model_convnext_additiveatt()
         else:
            raise KeyError("The model {} is not settled".format(self.model_name))
+
+    def set_model_convnext(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
+                                    num_classes=self.config.model_parameters["out_dim"],
+                                    num_blocks=self.config.model_parameters["model_structure"]["num_blocks"],
+                                    block_dims=self.config.model_parameters["model_structure"]["block_dims"],
+                                    stochastic_depth_prob=self.config.train_parameters["stochastic_depth_prob"],
+                                    layer_scale=self.config.train_parameters["norm_scale"],
+                                    norm=self.config.model_parameters["norm"])
+
+    def set_model_convnext_additiveatt(self):
+        self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
+                                    num_classes=self.config.model_parameters["out_dim"],
+                                    num_blocks=self.config.model_parameters["model_structure"]["num_blocks"],
+                                    block_dims=self.config.model_parameters["model_structure"]["block_dims"],
+                                    stochastic_depth_prob=self.config.train_parameters["stochastic_depth_prob"],
+                                    attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
+                                    attention_norm=self.config.model_parameters["model_structure"]["att_norm"],
+                                    dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
+                                    layer_scale=self.config.train_parameters["norm_scale"],
+                                    norm=self.config.model_parameters["norm"])
 
     def set_model_densenet_additiveatt(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -103,8 +134,8 @@ class Compile_Model:
                 		        dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
 		                        dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
 		                        attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
-		                        batch_norm=self.config.model_parameters["batch_norm"],
-		                        layer_norm=self.config.model_parameters["layer_norm"])
+		                        norm=self.config.model_parameters["norm"])
+
 
     def set_model_densenet(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -113,7 +144,9 @@ class Compile_Model:
                                         kernel_sizes=self.config.model_parameters["model_structure"]["kernels"],
                                         conv_channels=self.config.model_parameters["model_structure"]["conv_channels"],
                                         dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
-                                        factor_block=self.config.model_parameters["model_structure"]["factor_block"])
+                                        factor_block=self.config.model_parameters["model_structure"]["factor_block"],
+                                        norm=self.config.model_parameters["norm"])
+
 
     def set_model_additiveatt(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -123,14 +156,14 @@ class Compile_Model:
                         dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
                         dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
                         attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
-                        batch_norm=self.config.model_parameters["batch_norm"],
-                        layer_norm=self.config.model_parameters["layer_norm"])
+                        norm=self.config.model_parameters["norm"])
 
     def set_model_fnn(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
                         num_of_class=self.config.model_parameters["out_dim"],
                         nodes_fnn=self.config.model_parameters["model_structure"]["fnn_dim"],
-                        dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"])
+                        dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
+                        norm=self.config.model_parameters["norm"])
 
     def set_model_conv1d(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -139,8 +172,7 @@ class Compile_Model:
                         kernel_sizes=self.config.model_parameters["model_structure"]["kernels"], stride=1,
                         dropout_conv=self.config.model_parameters["model_structure"]["conv_dropout"],
                         dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
-                        batch_norm=self.config.model_parameters["batch_norm"],
-                        layer_norm=self.config.model_parameters["layer_norm"])        
+                        norm=self.config.model_parameters["norm"])        
 
     def set_model_conv1d_additiveatt(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -153,8 +185,7 @@ class Compile_Model:
                         dropout_fnn=self.config.model_parameters["model_structure"]["fnn_dropout"],
                         dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
                         dropout_in=self.config.model_parameters["model_structure"]["in_dropout"],
-                        batch_norm=self.config.model_parameters["batch_norm"],
-                        layer_norm=self.config.model_parameters["layer_norm"])
+                        norm=self.config.model_parameters["norm"])
 
 
 
@@ -330,7 +361,7 @@ class Compile_Model:
                             num_workers=self.config.train_parameters["num_workers"],
                             bucketing=self.config.train_parameters["bucketing"],
                             stratified=self.config.train_parameters["stratified"],
-                            batch_size=self.config.model_parameters["batch_size"], report_att=report_att)
+                            batch_size=self.config.model_parameters["batch_size"], report_att=report_att, return_layer="avgpool")
 
 
 
@@ -354,5 +385,6 @@ if __name__ == "__main__":
         compiled_model.predict_model()
     if model_arguments.test:
         compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
+#        compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_11-09-2024_13-50-47/", type_load="checkpoint")
         compiled_model.test_model()
 
