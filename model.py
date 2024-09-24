@@ -384,7 +384,7 @@ if __name__ == "__main__":
         compiled_model.load_model(compiled_model.results_dir)
         compiled_model.predict_model()
     if model_arguments.test:
-        compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
-#        compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_11-09-2024_13-50-47/", type_load="checkpoint")
+ #       compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
+        compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_18-09-2024_17-07-53", type_load="checkpoint")
         compiled_model.test_model()
 

@@ -18,6 +18,8 @@ from sklearn.utils import resample
 from sklearn.metrics import balanced_accuracy_score, f1_score, precision_score, recall_score, roc_auc_score, matthews_corrcoef
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, RocCurveDisplay, roc_curve, PrecisionRecallDisplay, precision_recall_curve, det_curve, DetCurveDisplay
 
+from pytorch_grad_cam import GradCAMPlusPlus, LayerCAM, EigenCAM
+
 sys.dont_write_bytecode = True
 
 from data_utils import ProteomeDataset, ToTensor, Normalize_Data, BucketSampler, FractionEmbeddings, PhenotypeInteger
@@ -28,21 +30,40 @@ from utils import NNUtils, Metrics
 
 class Test_NeuralNet:
 
-    def __init__(self, network, configuration, mixed_precision=None, results_dir=None, results_module=None):
+    def __init__(self, network, configuration, mixed_precision=None, results_dir=None, results_module=None, method_interpret="GradCAM++"):
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6'
         torch.cuda.empty_cache()
         self.device = NNUtils.get_device()
         print("Testing on {}".format(self.device))
+        print(network)
         self.network = network.to(self.device)
         self.configuration = configuration
         self.results_dir = results_dir
         self.results_module = results_module
+        if method_interpret == "GradCAM++":
+            self.method_interpret = GradCAMPlusPlus(model=self.network,
+                                                    target_layers=[self.network.features[-1]],
+                                                    reshape_transform=Test_NeuralNet.reshape_transform)
+
+    @staticmethod
+    def reshape_transform(tensor, height=14, width=14):
+        print(tensor.shape)
+ #       result = tensor[:, 1:, :].reshape(tensor.size(0),
+  #                                    tensor.size(1), tensor.size(2))
+        result = tensor
+        # Bring the channels to the first dimension,
+        # like in CNNs.
+ #       result = result.transpose(2, 3).transpose(1, 2)
+        print(result.shape)
+        return result
+
 
     @staticmethod
     def get_activation(name):
         def hook(model, input, output):
             activation[name] = output.detach()
         return hook
+
 
 
     def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att, bucketing, stratified, return_layer=False):
@@ -89,6 +110,11 @@ class Test_NeuralNet:
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(predictions_logit, labels)
+
+                # interpet
+                grayscale_cam = self.method_interpret(input_tensor=embeddings, lengths_tensor=lengths,
+                        targets=None)
+                print(grayscale_cam.shape)
 
                 predictions_lst.extend(predictions.to("cpu").reshape(len(predictions,)).tolist())
                 features_lst.append(activation["{}".format(return_layer)].cpu().numpy())
