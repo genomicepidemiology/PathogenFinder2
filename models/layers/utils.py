@@ -8,6 +8,19 @@ def create_mask(seq_lengths, dimensions_batch):
     mask = torch.arange(dimensions_batch[1], device=seq_lengths.device)[None, :] > seq_lengths[:, None]
     return mask
 
+class Padding1d(nn.Module):
+    def __init__(self, mask_value = 0):
+        super().__init__()
+        self.mask_value = mask_value
+
+    def forward(self, x, mask):
+ #       x = x.permute(0, 2,1)
+        x = x.masked_fill(mask, self.mask_value)
+#        x = x.permute(0, 2,1)
+        return x
+
+        
+
 class LayerNorm1d(nn.LayerNorm):
     def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 1)

@@ -2,7 +2,8 @@ from torch import nn, Tensor
 import torch
 from .layers.convnextblock import CNBlock
 from functools import partial
-from .layers.utils import LayerNorm1d, Conv1dNormActivation, Permute
+from .layers.utils import LayerNorm1d, Conv1dNormActivation, Permute, Padding1d
+import models.layers.utils as utils
 from typing import Union, Tuple
 
 
@@ -47,21 +48,26 @@ class ConvNeXt_Net(nn.Module):
                 layers.append(self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer))
 
         self.features = nn.Sequential(*layers)
-        self.avgpool = nn.AdaptiveAvgPool1d(1)
 
         self.classifier = nn.Sequential(
             norm_layer(block_dims[-1]), nn.Flatten(1), nn.Linear(block_dims[-1], num_classes)
             )
 
         for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.Linear)):
+            if isinstance(m, (nn.Conv1d, nn.Linear)):
                 nn.init.trunc_normal_(m.weight, std=0.02)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
+    
+    def adaptiveavgpool_mask(self, x:Tensor, lengths:Tensor) -> Tensor:
+        x = torch.sum(x, axis=2)
+        x = torch.div(x,lengths)
+        return x[:,:,None]
 
     def create_downsample(self, dim_in:int, dim_out:int, norm_layer:nn.Module) -> nn.Module:
         return nn.Sequential(norm_layer(dim_in),
-                                nn.Conv1d(dim_in, dim_out, kernel_size=2, stride=1, padding=2//2),
+                                nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False),
+                            #    Padding1d()
                                 )
 
     def create_block(self, dim:int, norm_layer:nn.Module, sd_prob:float, layer_scale:float) -> nn.Module:
@@ -71,28 +77,22 @@ class ConvNeXt_Net(nn.Module):
     def create_stemcell(self, input_dim:int, output_dim:int, norm_layer: nn.Module) -> nn.Module:
         stemcell = nn.Sequential(
                     Permute([0, 2, 1]),
-                    nn.Conv1d(input_dim, output_dim, kernel_size=1),
+                    nn.Conv1d(input_dim, output_dim, kernel_size=1, bias=False),
                     norm_layer(output_dim),
                     )
         return stemcell
 
-    def create_stemcell_fancy(self, input_dim: int, output_dim: int, norm_layer: nn.Module)->nn.Module:
-        stem_cell = Conv1dNormActivation(
-                        input_dim,
-                        output_dim,
-                        kernel_size=1,
-                        stride=1,
-                        padding=1//2,
-                        norm_layer=norm_layer,
-                        activation_layer=None,
-                        bias=False,
-                        )
-        return stem_cell
-
     def forward(self, x: Tensor, lengths: Tensor) -> Tuple[Tensor, Union[Tensor, None]]:
+        mask = utils.create_mask(seq_lengths=lengths, dimensions_batch=x.shape)
+        print(x.shape, mask.shape)
+        x = x.permute(0,2,1)
+        x = x.masked_fill(mask, 0)
+        x = x.permute(0,2,1)
         x = self.stem_cell(x)
+        x = x.masked_fill(mask, 0)
         x = self.features(x)
-        x = self.avgpool(x)
+        x = x.masked_fill(mask, 0)
+        x = self.adaptiveavgpool_mask(x, lengths)
         x = self.classifier(x)
         return x, None
 

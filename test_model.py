@@ -40,21 +40,21 @@ class Test_NeuralNet:
         self.configuration = configuration
         self.results_dir = results_dir
         self.results_module = results_module
-        if method_interpret == "GradCAM++":
-            self.method_interpret = GradCAMPlusPlus(model=self.network,
-                                                    target_layers=[self.network.features[-1]],
-                                                    reshape_transform=Test_NeuralNet.reshape_transform)
+        #if method_interpret == "GradCAM++":
+            #self.method_interpret = GradCAMPlusPlus(model=self.network,
+         #                                           target_layers=[self.network.features[-1]],
+          #                                          reshape_transform=Test_NeuralNet.reshape_transform)
 
     @staticmethod
     def reshape_transform(tensor, height=14, width=14):
-        print(tensor.shape)
+       # print(tensor.shape)
  #       result = tensor[:, 1:, :].reshape(tensor.size(0),
   #                                    tensor.size(1), tensor.size(2))
         result = tensor
         # Bring the channels to the first dimension,
         # like in CNNs.
  #       result = result.transpose(2, 3).transpose(1, 2)
-        print(result.shape)
+       # print(result.shape)
         return result
 
 
@@ -90,9 +90,9 @@ class Test_NeuralNet:
                 activation[name] = output.detach()
             return hook
 
-        if return_layer:
-            self.network.avgpool.register_forward_hook(get_activation("{}".format(return_layer)))
-
+   #     if return_layer:
+  #          self.network.avgpool.register_forward_hook(get_activation("{}".format(return_layer)))
+        difference_length = []
         with torch.inference_mode():
             for batch in tqdm(test_loader):
                 embeddings = batch["Input"]
@@ -100,6 +100,7 @@ class Test_NeuralNet:
                 lengths = batch["Protein Count"]
                 filename = batch["File_Names"]
                 prot_name = batch["Protein_IDs"]
+                difference_length.append(max(lengths)-min(lengths))
                 labels_lst.extend(labels.reshape(len(labels),).tolist())
                 lengths_lst.extend(lengths.reshape(len(lengths,)).tolist())
                 filenames_lst.extend(filename)
@@ -110,14 +111,13 @@ class Test_NeuralNet:
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(predictions_logit, labels)
-
                 # interpet
-                grayscale_cam = self.method_interpret(input_tensor=embeddings, lengths_tensor=lengths,
-                        targets=None)
-                print(grayscale_cam.shape)
+ #               grayscale_cam = self.method_interpret(input_tensor=embeddings, lengths_tensor=lengths,
+  #                      targets=None)
+   #             print(grayscale_cam.shape)
 
                 predictions_lst.extend(predictions.to("cpu").reshape(len(predictions,)).tolist())
-                features_lst.append(activation["{}".format(return_layer)].cpu().numpy())
+#                features_lst.append(activation["{}".format(return_layer)].cpu().numpy())
 
                 if report_att:
                     attentions = attentions.to("cpu")
@@ -126,9 +126,10 @@ class Test_NeuralNet:
                         attentions_ = attentions_.squeeze().numpy()[:len(prot_name_)]
                         np.savez_compressed("{}/attention_vals_test/{}".format(self.results_dir, os.path.basename(filename_)),
                                             attentions=attentions_, protein_IDs=prot_name_)
+        print(np.mean(difference_length))
         exec_time = time.time() - start_time
-        features = np.concatenate(features_lst)
-        np.savez_compressed("{}/features".format(self.results_dir), return_layer=features)
+ #       features = np.concatenate(features_lst)
+  #      np.savez_compressed("{}/features".format(self.results_dir), return_layer=features)
 
         results_df = pd.DataFrame({"Filename": filenames_lst, "Protein_Count": lengths_lst,
 					"Correct Label": labels_lst, "Predictions": predictions_lst})
