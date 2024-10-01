@@ -69,6 +69,7 @@ class Test_NeuralNet:
     def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att, bucketing, stratified, return_layer=False):
 
         start_time = time.time()
+        stratified = False
 
         test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=stratified,
                                              shuffle=True, pin_memory=asynchronity, bucketing=bucketing, drop_last=True)

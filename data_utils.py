@@ -203,7 +203,7 @@ class ProteomeDataset(Dataset):
             data["File_Names"].append(b["File_Name"])
             data["Protein_IDs"].append(b["Protein_IDs"])
             input_arr = np.array([b["Input"]])
-#            input_arr = np.concatenate([np.array([b["Input"]]), np.zeros((input_arr.shape[0], 240, input_arr.shape[2]), dtype="float32")], axis=1)
+#            input_arr = np.concatenate([np.array([b["Input"]]), np.zeros((input_arr.shape[0],1100, input_arr.shape[2]), dtype="float32")], axis=1)
             data["Input"] = torch.from_numpy(input_arr)
             data["Mask"] = torch.zeros(1,len(b["Input"]))
 

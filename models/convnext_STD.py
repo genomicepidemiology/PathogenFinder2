@@ -17,6 +17,7 @@ class ConvNeXt_Net(nn.Module):
         layer_scale: float = 1e-6,
         num_classes: int = 1,
         norm: str = LayerNorm1d,
+        downsample: bool = False,
         ) -> None:
         super().__init__()
 
@@ -29,7 +30,7 @@ class ConvNeXt_Net(nn.Module):
         else:
             norm_layer = None
 
-        layers: List[nn.Module] = []
+        self.downsample = downsample
 
         # Stem
         self.stem_cell = self.create_stemcell(input_dim=input_dim,
@@ -41,13 +42,14 @@ class ConvNeXt_Net(nn.Module):
             # adjust stochastic depth probability based on the depth of the stage block
             sd_prob = stochastic_depth_prob * stage_block_id / (num_blocks - 1.0)
             cnblock = self.create_block(dim=dim_block, norm_layer=norm_layer, sd_prob=sd_prob, layer_scale=layer_scale)
-            layers.append(cnblock)
+            self.features.append(cnblock)
             stage_block_id += 1
 
             if n != num_blocks-1 and dim_block != block_dims[n+1]:
-                layers.append(self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer))
+                downsample_layer = self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer)
+                self.features.append(downsample_layer)
 
-        self.features = nn.Sequential(*layers)
+        self.avgpool = adaptiveavgpool_mask
 
         self.classifier = nn.Sequential(
             norm_layer(block_dims[-1]), nn.Flatten(1), nn.Linear(block_dims[-1], num_classes)
@@ -65,10 +67,12 @@ class ConvNeXt_Net(nn.Module):
         return x[:,:,None]
 
     def create_downsample(self, dim_in:int, dim_out:int, norm_layer:nn.Module) -> nn.Module:
-        return nn.Sequential(norm_layer(dim_in),
-                                nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False),
-                            #    Padding1d()
-                                )
+        if self.downsample:
+            return nn.Sequential(norm_layer(dim_in),
+                                nn.Conv1d(dim_in, dim_out, kernel_size=2, stride=2, bias=False))
+        else:
+            return nn.Sequential(norm_layer(dim_in),
+                                nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False))
 
     def create_block(self, dim:int, norm_layer:nn.Module, sd_prob:float, layer_scale:float) -> nn.Module:
         return CNBlock(dim=dim, layer_scale=layer_scale, stochastic_depth_prob=sd_prob,
@@ -84,14 +88,11 @@ class ConvNeXt_Net(nn.Module):
 
     def forward(self, x: Tensor, lengths: Tensor) -> Tuple[Tensor, Union[Tensor, None]]:
         mask = utils.create_mask(seq_lengths=lengths, dimensions_batch=x.shape)
-        print(x.shape, mask.shape)
-        x = x.permute(0,2,1)
-        x = x.masked_fill(mask, 0)
-        x = x.permute(0,2,1)
         x = self.stem_cell(x)
         x = x.masked_fill(mask, 0)
-        x = self.features(x)
-        x = x.masked_fill(mask, 0)
+        for layer in self.features:
+            x = layer(x)
+            x = x.masked_fill(mask, 0)
         x = self.adaptiveavgpool_mask(x, lengths)
         x = self.classifier(x)
         return x, None

@@ -36,7 +36,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         else:
             norm_layer = None
 
-        layers: List[nn.Module] = []
+        self.features = ModuleList()
 
         # Stem
         self.stem_cell = self.create_stemcell(input_dim=input_dim,
@@ -48,13 +48,12 @@ class ConvNet_AddAtt_Net(nn.Module):
             # adjust stochastic depth probability based on the depth of the stage block
             sd_prob = stochastic_depth_prob * stage_block_id / (num_blocks + 1 - 1.0)
             cnblock = self.create_block(dim=dim_block, norm_layer=norm_layer, sd_prob=sd_prob, layer_scale=layer_scale)
-            layers.append(cnblock)
+            self.features.append(cnblock)
             stage_block_id += 1
 
             if n != num_blocks-1 and dim_block != block_dims[n+1]:
-                layers.append(self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer))
+                self.features.append(self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer))
 
-        self.features = nn.Sequential(*layers)
         self.att_norm = norm_layer(block_dims[-1])
         self.attention_layer = Attention_Methods(attention_type=attention_type,
                                                         dimensions_in=block_dims[-1],
@@ -76,7 +75,7 @@ class ConvNet_AddAtt_Net(nn.Module):
 
     def create_downsample(self, dim_in:int, dim_out:int, norm_layer:nn.Module) -> nn.Module:
         return nn.Sequential(norm_layer(dim_in),
-                                nn.Conv1d(dim_in, dim_out, kernel_size=2, stride=1, padding=2//2),
+                                nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False),
                                 )
 
     def create_block(self, dim:int, norm_layer:nn.Module, sd_prob:float, layer_scale:float) -> nn.Module:
@@ -86,7 +85,7 @@ class ConvNet_AddAtt_Net(nn.Module):
     def create_stemcell(self, input_dim:int, output_dim:int, norm_layer: nn.Module) -> nn.Module:
         stemcell = nn.Sequential(
                     Permute([0, 2, 1]),
-                    nn.Conv1d(input_dim, output_dim, kernel_size=1),
+                    nn.Conv1d(input_dim, output_dim, kernel_size=1, bias=False),
                     norm_layer(output_dim),
                     )
         return stemcell
@@ -105,11 +104,14 @@ class ConvNet_AddAtt_Net(nn.Module):
         return stem_cell
 
     def forward(self, x: Tensor, lengths: Tensor) -> Tuple[Tensor, Union[Tensor, None]]:
+        mask = utils.create_mask(seq_lengths=lengths, dimensions_batch=x.shape)
         x = self.stem_cell(x)
-        x = self.features(x)
+        x = x.masked_fill(mask, 0)
+        for layer in self.features:
+            x = layer(x)
+            x = x.masked_fill(mask, 0)
  #       x = self.att_norm(x)
         x = torch.permute(x, (0, 2, 1))
-        mask = utils.create_mask(seq_lengths=lengths, dimensions_batch=x.shape)
         x, attentions = self.attention_layer(x, mask)
         x = self.stochastic_depth_att(x)
         x = torch.unsqueeze(x, -1)

@@ -58,7 +58,7 @@ class Attention_Methods(nn.Module):
         weights = self.dropout(weights)
         weights = weights.squeeze(2).unsqueeze(1)
 
-        weights.masked_fill(mask, -float("inf"))
+        weights = weights.masked_fill(mask, -float("inf"))
 
         att = torch.nn.functional.softmax(weights, dim=-1)
         attention_result = torch.bmm(att, x_in).squeeze(1)
