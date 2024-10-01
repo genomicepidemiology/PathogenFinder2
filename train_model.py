@@ -23,7 +23,7 @@ class Train_NeuralNet():
     MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
 
     def __init__(self, network, configuration=None, loss_function=None, results_dir=None, memory_report=False, 
-		compiler=False, mixed_precision=False, results_module=None, wandb_report=False):
+		compiler=False, mixed_precision=False, results_module=None, wandb_report=False, swa_iter=False):
 
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6' 
         torch.cuda.empty_cache()
@@ -46,6 +46,8 @@ class Train_NeuralNet():
 
         self.mixed_precision = mixed_precision
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
+
+        self.swa_iter = swa_iter
 
 
         self.results_training = wandb_report
@@ -184,8 +186,8 @@ class Train_NeuralNet():
                 self.scaler.step(self.optimizer)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
             self.scaler.update()
-            if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
-                self.update_scheduler()          
+            #if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
+             #   self.update_scheduler()          
             #  computing loss
             loss_c = loss.detach()
             pred_c = predictions.detach()
@@ -202,6 +204,8 @@ class Train_NeuralNet():
             batch_n += 1
         loss_pass = loss_pass/batch_n
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
+        if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
+            self.update_scheduler()
         return loss_pass, mcc_pass, lr_rate_lst, profiler
 
     def val_pass(self, val_loader, batch_size, profiler=None, asynchronity=False):
@@ -316,23 +320,30 @@ class Train_NeuralNet():
         if keep_model == "last_epoch":
             self.saved_model = {"epoch": epoch, 'model_state_dict': self.network.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict(),
                                 'loss': loss_train, "val_measure": mcc_v}
-            
+        if self.swa_iter:
+            swa_model, swa_loss, mcc_v_swa = self.swa_pass(state_dict_model=self.network.state_dict(), optimizer=self.optimizer,
+                                                            swa_iter=self.swa_iter, train_loader=train_loader, val_loader=val_loader, batch_size=batch_size,
+                                                            asynchronity=asynchronity)
+            self.saved_model = {"epoch": epoch+self.swa_iter, "model_state_dict": swa_model.state_dict(), "optimizer_state_dict": self.optimizer.state_dict(),
+                            "loss": swa_loss, "val_measure":mcc_v_swa}
         if self.profiler is not None:
             self.stop_memory_reports()
         return self.saved_model
 
-    def swa_pass(self, state_dict_model, optimizer, swa_iter, train_loader):
-        self.network = self.network.load_state_dict(state_dict)
+    def swa_pass(self, state_dict_model, optimizer, swa_iter, train_loader, val_loader, asynchronity, batch_size):
+        self.network.load_state_dict(state_dict_model)
         swa_model = swa_utils.AveragedModel(self.network)
         swa_scheduler = swa_utils.SWALR(optimizer, swa_lr=0.05)
         for swa_epoch in range(swa_iter):
-            loss_train, prediction_train, labels_train, lr_rate, profiler = self.train_pass(train_loader=train_loader,
-										              clipping=False)
-            swa_model.update_parameters(model)
+            loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, batch_size=batch_size,
+                                    clipping=False, asynchronity=asynchronity)
+            loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader, asynchronity=asynchronity, batch_size=batch_size)
+
+            swa_model.update_parameters(swa_model)
             swa_scheduler.step()
 
         swa_utils.update_bn(train_loader, swa_model)
-        return swa_model
+        return swa_model, loss_train, mcc_v
    
     def save_model(self, model, type_save="state_dict"):
         path = "{}/model.pth".format(self.results_dir)

@@ -106,6 +106,7 @@ class Compile_Model:
                                     num_classes=self.config.model_parameters["out_dim"],
                                     num_blocks=self.config.model_parameters["model_structure"]["num_blocks"],
                                     block_dims=self.config.model_parameters["model_structure"]["block_dims"],
+                                    downsample=self.config.model_parameters["model_structure"]["downsample"],
                                     stochastic_depth_prob=self.config.train_parameters["stochastic_depth_prob"],
                                     layer_scale=self.config.train_parameters["norm_scale"],
                                     norm=self.config.model_parameters["norm"])
@@ -266,6 +267,7 @@ class Compile_Model:
         train_instance = Train_NeuralNet(network=self.model, configuration=self.config,
                             loss_function=self.config.train_parameters["loss_function"],
                             results_dir=self.results_dir,
+                            swa_iter=self.config.train_parameters["swa"],
                             memory_report=self.config.train_parameters["memory_report"],
                             mixed_precision=self.config.train_parameters["mix_prec"],
                             compiler=self.config.train_parameters["compiler"],

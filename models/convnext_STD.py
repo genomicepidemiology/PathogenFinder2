@@ -35,6 +35,7 @@ class ConvNeXt_Net(nn.Module):
         # Stem
         self.stem_cell = self.create_stemcell(input_dim=input_dim,
                                     output_dim=block_dims[0], norm_layer=norm_layer)
+        self.features = nn.ModuleList()
         stage_block_id = 0
         for n in range(num_blocks):
             dim_block = block_dims[n]
@@ -49,7 +50,8 @@ class ConvNeXt_Net(nn.Module):
                 downsample_layer = self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer)
                 self.features.append(downsample_layer)
 
-        self.avgpool = adaptiveavgpool_mask
+        self.avgpool = self.adaptiveavgpool_mask
+        self.pool_mask = nn.MaxPool1d(2, stride=2)
 
         self.classifier = nn.Sequential(
             norm_layer(block_dims[-1]), nn.Flatten(1), nn.Linear(block_dims[-1], num_classes)
@@ -68,11 +70,12 @@ class ConvNeXt_Net(nn.Module):
 
     def create_downsample(self, dim_in:int, dim_out:int, norm_layer:nn.Module) -> nn.Module:
         if self.downsample:
-            return nn.Sequential(norm_layer(dim_in),
-                                nn.Conv1d(dim_in, dim_out, kernel_size=2, stride=2, bias=False))
+            downsample_layer = nn.Sequential(norm_layer(dim_in),
+                                    nn.Conv1d(dim_in, dim_out, kernel_size=2, stride=2, bias=False))
         else:
-            return nn.Sequential(norm_layer(dim_in),
-                                nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False))
+            downsample_layer =  nn.Sequential(norm_layer(dim_in),
+                                    nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False))
+        return downsample_layer
 
     def create_block(self, dim:int, norm_layer:nn.Module, sd_prob:float, layer_scale:float) -> nn.Module:
         return CNBlock(dim=dim, layer_scale=layer_scale, stochastic_depth_prob=sd_prob,
@@ -92,6 +95,8 @@ class ConvNeXt_Net(nn.Module):
         x = x.masked_fill(mask, 0)
         for layer in self.features:
             x = layer(x)
+            if "block" not in layer.__dict__["_modules"].keys():
+                mask = self.pool_mask(mask.float()).bool()
             x = x.masked_fill(mask, 0)
         x = self.adaptiveavgpool_mask(x, lengths)
         x = self.classifier(x)
