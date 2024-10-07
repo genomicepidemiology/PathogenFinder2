@@ -26,6 +26,8 @@ from data_utils import ProteomeDataset, ToTensor, Normalize_Data, BucketSampler,
 from data_utils import NN_Data
 from results_record import Json_Results
 from utils import NNUtils, Metrics
+from torch.optim import swa_utils
+
 
 
 class Test_NeuralNet:
@@ -69,7 +71,7 @@ class Test_NeuralNet:
     def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att, bucketing, stratified, return_layer=False):
 
         start_time = time.time()
-        stratified = False
+        batch_size = 1
 
         test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=stratified,
                                              shuffle=True, pin_memory=asynchronity, bucketing=bucketing, drop_last=True)

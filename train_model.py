@@ -131,6 +131,7 @@ class Train_NeuralNet():
     def update_scheduler(self, value=False):
         if self.warmup is not None:
             with self.warmup["scheduler"].dampening():
+                print(self.warmup["scheduler"].last_step, self.warmup["period"])
                 if self.warmup["scheduler"].last_step + 1 >= self.warmup["period"]:
                     self.scheduler_step(value=value)
         else:
@@ -278,7 +279,7 @@ class Train_NeuralNet():
         train_loader = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
         val_loader = NN_Data.load_data(val_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
+                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=False)
 
 
         steps = steps=len(train_loader)

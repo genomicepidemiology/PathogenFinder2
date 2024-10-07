@@ -81,7 +81,7 @@ class ConfigModel:
         model_parameters.init_params(
                 list_params=["batch_size", "model_name", "model_structure",  "out_dim", "out_init",
                     "out_sigmoid", "norm", "train_status", "saved_model", 
-                    "mode", "input_dim", "input_type"])
+                    "mode", "input_dim", "input_type", "length_information", "length_dim","sequence_dropout"])
         return model_parameters
 
     def init_train_parameters(self):

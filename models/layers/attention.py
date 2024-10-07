@@ -22,20 +22,20 @@ class Attention_Methods(nn.Module):
         #self.k_w = nn.Linear(dimensions_in, attention_dim, bias=False)
         #self.q_w = nn.Linear(dimensions_in, attention_dim, bias=False)
         self.k_w = nn.Sequential(Permute([0, 2, 1]),
-                                self.norm_layer(dimensions_in),
+ #                               self.norm_layer(dimensions_in),
                                 nn.Conv1d(dimensions_in, attention_dim, kernel_size=1, bias=False),
- #                               self.norm_layer(attention_dim),
+                                self.norm_layer(attention_dim),
                                 Permute([0, 2, 1]))
         self.q_w = nn.Sequential(Permute([0, 2, 1]),
-                                self.norm_layer(dimensions_in),
+  #                              self.norm_layer(dimensions_in),
                                 nn.Conv1d(dimensions_in, attention_dim, kernel_size=1, bias=False),
-  #                              self.norm_layer(attention_dim),
+                                self.norm_layer(attention_dim),
                                 Permute([0, 2, 1]))
         self.score_proj = nn.Linear(attention_dim, 1, bias=False)
 
         self.dropout = nn.Dropout(dropout)
 
-        #self.init_weights()
+ #       self.init_weights()
 
     def init_weights(self):
         torch.nn.init.xavier_normal_(self.q_w.weight)
@@ -50,10 +50,10 @@ class Attention_Methods(nn.Module):
 
         query = self.q_w(x_in)
         key = self.k_w(x_in)
-       # if self.norm_layer is None:
+ #       if self.norm_layer is None:
         projection = torch.tanh(query + key)
-        #else:
-           # projection = torch.tanh(self.norm_layer(query + key))
+  #      else:
+   #         projection = torch.tanh(self.norm_layer(query + key))
         weights = self.score_proj(projection)
         weights = self.dropout(weights)
         weights = weights.squeeze(2).unsqueeze(1)

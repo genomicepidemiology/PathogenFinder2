@@ -13,6 +13,8 @@ import pandas as pd
 import numpy as np
 import sys
 from datetime import datetime
+from torch.optim import swa_utils
+
 
 sys.dont_write_bytecode = True
 
@@ -109,7 +111,10 @@ class Compile_Model:
                                     downsample=self.config.model_parameters["model_structure"]["downsample"],
                                     stochastic_depth_prob=self.config.train_parameters["stochastic_depth_prob"],
                                     layer_scale=self.config.train_parameters["norm_scale"],
-                                    norm=self.config.model_parameters["norm"])
+                                    norm=self.config.model_parameters["norm"],
+                                    length_information=self.config.model_parameters["length_information"],
+                                    length_dim=self.config.model_parameters["length_dim"])
+#        self.model = swa_utils.AveragedModel(self.model)
 
     def set_model_convnext_additiveatt(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -121,7 +126,12 @@ class Compile_Model:
                                     attention_norm=self.config.model_parameters["model_structure"]["att_norm"],
                                     dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
                                     layer_scale=self.config.train_parameters["norm_scale"],
-                                    norm=self.config.model_parameters["norm"])
+                                    sequence_dropout=self.config.model_parameters["sequence_dropout"],
+                                    norm=self.config.model_parameters["norm"],
+                                    length_information=self.config.model_parameters["length_information"],
+                                    length_dim=self.config.model_parameters["length_dim"])
+ #       self.model = swa_utils.AveragedModel(self.model)
+
 
     def set_model_densenet_additiveatt(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
@@ -386,9 +396,9 @@ if __name__ == "__main__":
         compiled_model.load_model(compiled_model.results_dir)
         compiled_model.predict_model()
     if model_arguments.test:
-   #     compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
+        compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
  #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext512126_addatt512Model2D_12-09-2024_11-01-05", type_load="checkpoint")
-        compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_27-09-2024_02-09-34", type_load="checkpoint")
+   #     compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext512126_addatt512Model2D_01-10-2024_18-01-58", type_load="checkpoint")
  #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_18-09-2024_17-07-53", type_load="checkpoint")
         compiled_model.test_model()
 
