@@ -151,8 +151,8 @@ class Train_NeuralNet():
         loss_pass = 0.
         count = 0
         len_dataloader = len(train_loader)
-        labels_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device, dtype=int)
-        pred_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device)
+        labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
+        pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
         batch_n = 0
 
         for batch in tqdm(train_loader):
@@ -193,7 +193,6 @@ class Train_NeuralNet():
             loss_c = loss.detach()
             pred_c = predictions.detach()
             labels = labels.detach()
-
             labels_tensor[pos_first:pos_last,:] = labels
             pred_tensor[pos_first:pos_last,:] = pred_c
 
@@ -218,8 +217,8 @@ class Train_NeuralNet():
         loss_pass = 0.
         count = 0
         len_dataloader = len(val_loader)
-        labels_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device, dtype=int)
-        pred_tensor = torch.empty((len_dataloader*batch_size, 1), device=self.device)
+        labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
+        pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
         batch_n = 0 
 
         with torch.inference_mode():

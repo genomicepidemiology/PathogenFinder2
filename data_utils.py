@@ -220,29 +220,36 @@ class ProteomeDataset(Dataset):
         ## get sequence lengths
         length_batch = len(batch)
         b_proteome_len = np.zeros((length_batch, 1), dtype=np.int32)
-        b_pathopheno = np.zeros((length_batch, 1), dtype=np.float32)
+ #       b_pathopheno = np.zeros((length_batch, 1), dtype=np.float32)
         protein_names = []
         file_names = []
 
         embedding_lst = []
+        patho_lst = []
 
         for i, b in enumerate(batch):
             b_proteome_len[i,:] = b["Protein Count"]
-            b_pathopheno[i,:] = b["Label"]
+#            b_pathopheno[i,:] = b["Label"]
+            print(b["Label"].shape)
+            patho_lst.append(torch.from_numpy(b["Label"]))
             file_names.append(b["File_Name"])
             protein_names.append(b["Protein_IDs"])
 
             embedding_lst.append(torch.from_numpy(b["Input"]))
         ## padd
         embeddings = torch.nn.utils.rnn.pad_sequence(embedding_lst, batch_first=True)
+        b_pathopheno = torch.cat(patho_lst)
         ## compute mask
         masks = torch.ones((length_batch, embeddings.size(1)), dtype=torch.bool)
         for i, seq in enumerate(embedding_lst):
             masks[i, :len(seq)] = 0
 
+        print(b_pathopheno.shape)
+
         return {"Input": embeddings, "Masks": masks,
                 "Protein Count": torch.from_numpy(b_proteome_len),
-                "PathoPhenotype": torch.from_numpy(b_pathopheno),
+#                "PathoPhenotype": torch.from_numpy(b_pathopheno),
+                "PathoPhenotype": b_pathopheno,
                 "Protein_IDs": protein_names, "File_Names": file_names
                 }
 

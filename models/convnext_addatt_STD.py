@@ -34,6 +34,7 @@ class ConvNet_AddAtt_Net(nn.Module):
 #        assert num_blocks == len(block_dims)
 
         self.input_dropout = nn.Dropout1d(sequence_dropout)
+        self.num_classes = num_classes
 
         if norm == "Layer":
             norm_layer = partial(LayerNorm1d, eps=1e-6)
