@@ -32,7 +32,7 @@ from torch.optim import swa_utils
 
 class Test_NeuralNet:
 
-    def __init__(self, network, configuration, mixed_precision=None, results_dir=None, results_module=None, method_interpret="GradCAM++"):
+    def __init__(self, network, configuration, mixed_precision=None, results_dir=None, results_module=None):
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6'
         torch.cuda.empty_cache()
         self.device = NNUtils.get_device()
@@ -75,8 +75,11 @@ class Test_NeuralNet:
 
         test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=stratified,
                                              shuffle=True, pin_memory=asynchronity, bucketing=bucketing, drop_last=True)
+        len_dataloader = len(test_loader)
         predictions_lst = []
         labels_lst = []
+        labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
+        pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
         lengths_lst = []
         filenames_lst = []
 
@@ -92,19 +95,21 @@ class Test_NeuralNet:
             def hook(model, input, output):
                 activation[name] = output.detach()
             return hook
-
+        count = 0
    #     if return_layer:
   #          self.network.avgpool.register_forward_hook(get_activation("{}".format(return_layer)))
         difference_length = []
         with torch.inference_mode():
             for batch in tqdm(test_loader):
+                pos_first, pos_last = count, count+batch_size
                 embeddings = batch["Input"]
                 labels = batch["PathoPhenotype"]
                 lengths = batch["Protein Count"]
                 filename = batch["File_Names"]
                 prot_name = batch["Protein_IDs"]
                 difference_length.append(max(lengths)-min(lengths))
-                labels_lst.extend(labels.reshape(len(labels),).tolist())
+                labels_tensor[pos_first:pos_last,:] = labels
+#                labels_lst.extend(labels.reshape(len(labels),).tolist())
                 lengths_lst.extend(lengths.reshape(len(lengths,)).tolist())
                 filenames_lst.extend(filename)
                 #  sending data to device
@@ -114,14 +119,10 @@ class Test_NeuralNet:
                 #  making predictions
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(predictions_logit, labels)
+                pred_c = predictions.detach()
+                pred_tensor[pos_first:pos_last,:] = pred_c
                 # interpet
- #               grayscale_cam = self.method_interpret(input_tensor=embeddings, lengths_tensor=lengths,
-  #                      targets=None)
-   #             print(grayscale_cam.shape)
-
-                predictions_lst.extend(predictions.to("cpu").reshape(len(predictions,)).tolist())
-#                features_lst.append(activation["{}".format(return_layer)].cpu().numpy())
-
+                count += batch_size
                 if report_att:
                     attentions = attentions.to("cpu")
                     for filename_, attentions_, prot_name_ in zip(filename, attentions, prot_name):
@@ -133,10 +134,18 @@ class Test_NeuralNet:
         exec_time = time.time() - start_time
  #       features = np.concatenate(features_lst)
   #      np.savez_compressed("{}/features".format(self.results_dir), return_layer=features)
-
-        results_df = pd.DataFrame({"Filename": filenames_lst, "Protein_Count": lengths_lst,
-					"Correct Label": labels_lst, "Predictions": predictions_lst})
+        results_df = pd.DataFrame({"Filename": filenames_lst, "Protein_Count": lengths_lst})
+        if pred_tensor.size()[1] == 2:
+            pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]
+            pred_tensor = (pred_tensor+1)/2
+            labels_tensor = labels_tensor[:,0] - labels_tensor[:, 1]
+            labels_tensor = (labels_tensor+1)/2
+        else:
+            pred_tensor = pred_tensor
+            labels_tensor = labels_tensor
         results_df["Predictions (Label)"] = 0
+        results_df["Correct Label"] = labels_tensor.tolist()
+        results_df["Predictions"] =  pred_tensor.tolist()
         results_df.loc[results_df["Predictions"]>0.5, "Predictions (Label)"] = 1
         results_df.to_csv("{}/predictions_test.tsv".format(self.results_dir), sep="\t", index=False)
 

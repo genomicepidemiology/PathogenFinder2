@@ -203,6 +203,12 @@ class Train_NeuralNet():
             count += batch_size
             batch_n += 1
         loss_pass = loss_pass/batch_n
+        if pred_tensor.size()[1] == 2:
+            pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]
+            pred_tensor = (pred_tensor+1)/2
+            labels_tensor = labels_tensor[:,0] - labels_tensor[:, 1]
+            labels_tensor = (labels_tensor+1)/2
+
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
         if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
             self.update_scheduler()
@@ -250,6 +256,12 @@ class Train_NeuralNet():
                 batch_n += 1
                 count += batch_size
         loss_pass = loss_pass/batch_n
+
+        if pred_tensor.size()[1] == 2:
+            pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]
+            pred_tensor = (pred_tensor+1)/2
+            labels_tensor = labels_tensor[:,0] - labels_tensor[:, 1]
+            labels_tensor = (labels_tensor+1)/2
 
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
 

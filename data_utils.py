@@ -99,7 +99,6 @@ class ProteomeDataset(Dataset):
                  sampling=False, cluster_tsv=None, transform=None, weighted=False,
                  load_data=True):
         self.landmarks_frame = pd.read_csv(csv_file, sep="\t")
-        print(self.landmarks_frame)
         self.root_dir = os.path.abspath(root_dir)
         self.transform = transform
         if not weighted:
@@ -230,7 +229,6 @@ class ProteomeDataset(Dataset):
         for i, b in enumerate(batch):
             b_proteome_len[i,:] = b["Protein Count"]
 #            b_pathopheno[i,:] = b["Label"]
-            print(b["Label"].shape)
             patho_lst.append(torch.from_numpy(b["Label"]))
             file_names.append(b["File_Name"])
             protein_names.append(b["Protein_IDs"])
@@ -243,8 +241,6 @@ class ProteomeDataset(Dataset):
         masks = torch.ones((length_batch, embeddings.size(1)), dtype=torch.bool)
         for i, seq in enumerate(embedding_lst):
             masks[i, :len(seq)] = 0
-
-        print(b_pathopheno.shape)
 
         return {"Input": embeddings, "Masks": masks,
                 "Protein Count": torch.from_numpy(b_proteome_len),
