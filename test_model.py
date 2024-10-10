@@ -78,10 +78,10 @@ class Test_NeuralNet:
         len_dataloader = len(test_loader)
         predictions_lst = []
         labels_lst = []
-#        labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
- #       pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
-        labels_tensor = torch.empty((64, self.network.num_classes), device=self.device, dtype=int)
-        pred_tensor = torch.empty((64, self.network.num_classes), device=self.device)
+        labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
+        pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
+#        labels_tensor = torch.empty((64, self.network.num_classes), device=self.device, dtype=int)
+ #       pred_tensor = torch.empty((64, self.network.num_classes), device=self.device)
         lengths_lst = []
         filenames_lst = []
 
@@ -125,7 +125,7 @@ class Test_NeuralNet:
                 pred_tensor[pos_first:pos_last,:] = pred_c
                 # interpet
                 count += batch_size
-                break
+ #               break
                 if report_att:
                     attentions = attentions.to("cpu")
                     for filename_, attentions_, prot_name_ in zip(filename, attentions, prot_name):
@@ -133,7 +133,6 @@ class Test_NeuralNet:
                         attentions_ = attentions_.squeeze().numpy()[:len(prot_name_)]
                         np.savez_compressed("{}/attention_vals_test/{}".format(self.results_dir, os.path.basename(filename_)),
                                             attentions=attentions_, protein_IDs=prot_name_)
-        print(np.mean(difference_length))
         exec_time = time.time() - start_time
  #       features = np.concatenate(features_lst)
   #      np.savez_compressed("{}/features".format(self.results_dir), return_layer=features)
@@ -178,39 +177,30 @@ class Test_NeuralNet:
 #        self.make_graph(display=det_display, name_file="det",
  #                      title="DET")
 
-    def mcc_length(self, results_df, ranges=1500):
+    def mcc_length(self, results_df, ranges=1000):
         mcc_values = []
         count_samples = []
         length_ranges = []
+        new_data = []
+        new_data2 = []
         init_count = 0
         while init_count < 8000:
             last_count = init_count + ranges
-#            length_ranges.append(init_count)
             length_ranges.append("{}-{}".format(init_count, last_count))
             length_range = results_df.loc[(results_df["Protein_Count"]<last_count)&(results_df["Protein_Count"]>init_count)]
             mcc = Metrics.calculate_MCC(labels=torch.tensor(length_range["Correct Label"].values),
                                             predictions=torch.tensor(length_range["Predictions (Label)"].values), device="cpu")
             count_samples.extend(length_range["Protein_Count"].tolist())
             mcc_values.append(mcc.item())
+            new_data.append(["{}-{}".format(init_count, last_count), mcc.item()])
+            new_data2.append(["{}-{}".format(init_count, last_count), len(length_range)])
             init_count += ranges
-        print(count_samples)
-        print(mcc_values)
-        fig, ax = plt.subplots()
-        ax.bar(range(len(length_ranges)), mcc_values)
-        ax.set_xticklabels(length_ranges)
-        ax.set_ylabel("MCC")
-
-        # Log the plot
-        wandb.log({"MCC vs Length": fig})
-        plt.close()
-        fig, ax = plt.subplots()
-        ax.hist(count_samples)
- #       ax.set_ylabel("Count samples")
-
-        # Log the plot
-        wandb.log({"Samples vs Length": fig})
-        plt.close()
-#        return mcc_plot, count_plot
+        table = wandb.Table(data=new_data, columns = ["MCC", "Gene Count"])
+        wandb.log({"mcc_genecount" : wandb.plot.bar(table, "MCC", "Gene Count",
+                               title="MCC vs gene count")})
+        table = wandb.Table(data=new_data2, columns = ["Gene Count", "Count"])
+        wandb.log({"count_genecount" : wandb.plot.bar(table, "Gene Count", "Count",
+                               title="Amount at gene count")})
 
     def calculate_loss(self, predictions_logit, labels):
         predictions = torch.sigmoid(predictions_logit)
