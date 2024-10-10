@@ -164,6 +164,8 @@ class Test_NeuralNet:
 
         cm_display, roc_display, pr_display, det_display = self.get_graphs(data=results_df)
 
+        mcc_interval, count_interval = self.mcc_length(results_df=results_df)
+
         self.make_graph(display=cm_display, name_file="confusion_matrix",
                        title="Confusion Matrix")
         self.make_graph(display=roc_display, name_file="ROC_curve",
@@ -172,6 +174,36 @@ class Test_NeuralNet:
                        title="Precision Recall")
 #        self.make_graph(display=det_display, name_file="det",
  #                      title="DET")
+
+    def mcc_length(self, results_df, ranges=1500):
+        mcc_values = []
+        count_samples = []
+        length_ranges = []
+        init_count = 0
+        while init_count < 8000:
+            last_count = init_count + ranges
+            length_ranges.append("{}-{}".format(init_count, last_count))
+            length_range = results_df.loc[(results_df["Protein Count"]<last_count)&(results_df["Protein Count"]>init_count)]
+            mcc = Metrics.calculate_MCC(labels=torch.tensor(length_range["Correct Label"].values),
+                                            predictions=torch.tensor(length_range["Predictions (Label)"].values), device="cpu")
+            count_samples.append(len(length_range))
+            mcc_values.append(mcc)
+            init_count += ranges
+        fig, ax = plt.subplots()
+        ax.bar(length_samples, mcc_values)
+        ax.set_ylabel("MCC")
+
+        # Log the plot
+        wandb.log({"MCC vs Length": fig})
+        plt.close()
+        fig, ax = plt.subplots()
+        ax.bar(length_samples, count_values)
+        ax.set_ylabel("Count samples")
+
+        # Log the plot
+        wandb.log({"Samples vs Length": fig})
+        plt.close()
+        return mcc_plot, count_plot
 
     def calculate_loss(self, predictions_logit, labels):
         predictions = torch.sigmoid(predictions_logit)
