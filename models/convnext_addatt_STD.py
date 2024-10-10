@@ -19,6 +19,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         num_blocks: int,
         attention_dim: int,
         dropout_att: float,
+        stem_cell: bool = True,
         sequence_dropout: float = 0.3,
         length_information = False,
         length_dim = None,
@@ -45,11 +46,15 @@ class ConvNet_AddAtt_Net(nn.Module):
 
         self.stage_block_id = 0
         self.stochastic_depth_prob = stochastic_depth_prob
-        self.num_blocks = num_blocks
+        self.num_blocks = ConvNet_AddAtt_Net.get_blocks(block_dims, stem_cell)
 
         # Stem
-        self.stem_cell = self.create_stemcell(input_dim=input_dim,
+        if stem_cell:
+            self.stem_cell = self.create_stemcell(input_dim=input_dim,
                                     output_dim=block_dims[0], norm_layer=norm_layer)
+        else:
+            self.stem_cell = False
+
         sdvalue_stem_cell = self.get_sd_prob()
         self.sd_stem_cell = StochasticDepth(sdvalue_stem_cell, "row")
 
@@ -64,7 +69,8 @@ class ConvNet_AddAtt_Net(nn.Module):
             self.features.append(cnblock)
 
             if n != len(block_dims)-1 and dim_block != block_dims[n+1]:
-                self.features.append(self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer))
+                downsample = self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer)
+                self.features.append(downsample)
 
         self.att_norm = norm_layer(block_dims[-1])
         self.attention_layer = Attention_Methods(attention_type=attention_type,
@@ -77,15 +83,24 @@ class ConvNet_AddAtt_Net(nn.Module):
 
         self.classifier = Classifier(block_dims[-1], num_classes, length_information, length_dim)
 
-#        self.classifier = nn.Sequential(
- #           norm_layer(block_dims[-1]), nn.Flatten(1), nn.Linear(block_dims[-1], num_classes)
-  #          )
-
         for m in self.modules():
             if isinstance(m, (nn.Conv2d, nn.Linear)):
                 nn.init.trunc_normal_(m.weight, std=0.02)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
+
+    @staticmethod
+    def get_blocks(block_dims, stem_cell):
+        num_blocks = int(stem_cell)
+        for n in range(len(block_dims)):
+            num_blocks += 1
+            if n != 0:
+                prev_block = block_dims[n-1]
+                if prev_block != block_dims[n]:
+                    num_blocks += 1
+        #num_blocks += 1
+        return num_blocks
+
 
     def get_sd_prob(self):
         sd_prob = self.stochastic_depth_prob * self.stage_block_id / (self.num_blocks - 1.)
@@ -95,6 +110,7 @@ class ConvNet_AddAtt_Net(nn.Module):
     def create_downsample(self, dim_in:int, dim_out:int, norm_layer:nn.Module) -> nn.Module:
         return nn.Sequential(norm_layer(dim_in),
                                 nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False),
+                                StochasticDepth(self.get_sd_prob(), "row")
                                 )
 
     def create_block(self, dim:int, norm_layer:nn.Module, sd_prob:float, layer_scale:float) -> nn.Module:

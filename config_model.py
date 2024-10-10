@@ -191,6 +191,8 @@ class ConfigModel:
         parser.add_argument("-train", "--train", help="do training", action="store_true")
         parser.add_argument("-predict", "--predict", help="predict from file", action="store_true")
         parser.add_argument("-test", "--test", help="Test", action="store_true")
+        parser.add_argument("-hyperparam_opt", "--hyperparam_opt", help="Hyperparam", action="store_true")
+
         parser_model = parser.add_argument_group('Model Parameters')
         parser_model.add_argument("-m", "--model_type", help="model type",
                                 default="additive")
@@ -227,6 +229,7 @@ class ConfigModel:
         parser_train.add_argument("-w_u", "--warm_up", help="warm_up period", default=0)
         parser_train.add_argument("-w_r", "--wandb_report", help="wandb_report", type=int, default=None)
 
+        parser_hyperparamsel = parser.add_argument_group('Hyperparameter Selection Parameters')
 
         parser_prediction = parser.add_argument_group('Prediction Parameters')
         parser_prediction.add_argument("-pred_d", "--pred_df", help="pred_df")

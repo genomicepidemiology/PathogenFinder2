@@ -375,6 +375,41 @@ class Compile_Model:
                             stratified=self.config.train_parameters["stratified"],
                             batch_size=self.config.model_parameters["batch_size"], report_att=report_att, return_layer="avgpool")
 
+    def hyperparam_sel(self):
+        from hyperparam_sel import HyperParameter_Opt
+
+#        if self.model is None:
+        dual_pred = self.is_dual()
+        hyper_instance = HyperParameter_Opt(network=self.model, configuration=self.config,
+                            loss_function=self.config.train_parameters["loss_function"],
+                            results_dir=self.results_dir,
+                            swa_iter=self.config.train_parameters["swa"],
+                            memory_report=self.config.train_parameters["memory_report"],
+                            mixed_precision=self.config.train_parameters["mix_prec"],
+                            compiler=self.config.train_parameters["compiler"],
+                            wandb_report=self.results_model)
+
+        # Create Train data
+        train_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=self.config.train_parameters["train_df"],
+                            data_loc=self.config.train_parameters["train_loc"],
+                            data_type="train",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred,
+                            weighted=self.config.train_parameters["imbalance_weight"],
+                            normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+        # Create Val data
+        val_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=self.config.train_parameters["val_df"],
+                            data_loc=self.config.train_parameters["val_loc"],
+                            data_type="prediction",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+
 
 
 if __name__ == "__main__":
@@ -392,12 +427,14 @@ if __name__ == "__main__":
     if model_arguments.train:
         best_model = compiled_model.train_model()
         config.save_data("{}/config_file.json".format(compiled_model.results_dir))
+    if model_arguments.hyperparam_opt:
+        compiled_model.hyperparam_sel()
     if model_arguments.predict:
         compiled_model.load_model(compiled_model.results_dir)
         compiled_model.predict_model()
     if model_arguments.test:
  #       compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
-        compiled_model.load_model("/work3/alff/results_pathogenfinder2/ConvNextAtt_normlayafter_lr3_07-10-2024_17-34-51", type_load="checkpoint")
+        compiled_model.load_model("/work3/alff/results_pathogenfinder2/ConvNextAtt_dual_3blocks_addlen_09-10-2024_15-25-01", type_load="checkpoint")
    #     compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext512126_addatt512Model2D_01-10-2024_18-01-58", type_load="checkpoint")
  #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_18-09-2024_17-07-53", type_load="checkpoint")
         compiled_model.test_model()
