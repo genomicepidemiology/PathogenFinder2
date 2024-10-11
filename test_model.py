@@ -178,29 +178,38 @@ class Test_NeuralNet:
  #                      title="DET")
 
     def mcc_length(self, results_df, ranges=1000):
-        mcc_values = []
-        count_samples = []
-        length_ranges = []
         new_data = []
         new_data2 = []
+        new_data3 = []
+        new_data4 = []
         init_count = 0
         while init_count < 8000:
             last_count = init_count + ranges
-            length_ranges.append("{}-{}".format(init_count, last_count))
             length_range = results_df.loc[(results_df["Protein_Count"]<last_count)&(results_df["Protein_Count"]>init_count)]
             mcc = Metrics.calculate_MCC(labels=torch.tensor(length_range["Correct Label"].values),
                                             predictions=torch.tensor(length_range["Predictions (Label)"].values), device="cpu")
-            count_samples.extend(length_range["Protein_Count"].tolist())
-            mcc_values.append(mcc.item())
             new_data.append(["{}-{}".format(init_count, last_count), mcc.item()])
             new_data2.append(["{}-{}".format(init_count, last_count), len(length_range)])
+            new_data3.append(["{}-{}".format(init_count, last_count), sum(length_range["Correct Label"]==1), sum(length_range["Correct Label"]==0)])
+            new_data4.append(["{}-{}".format(init_count, last_count), sum(length_range["Predictions (Label)"]==1), sum(length_range["Predictions (Label)"]==0)])
             init_count += ranges
-        table = wandb.Table(data=new_data, columns = ["MCC", "Gene Count"])
-        wandb.log({"mcc_genecount" : wandb.plot.bar(table, "MCC", "Gene Count",
+        table = wandb.Table(data=new_data, columns = ["Gene Count", "MCC"])
+        wandb.log({"mcc_genecount" : wandb.plot.bar(table,"Gene Count", "MCC",
                                title="MCC vs gene count")})
         table = wandb.Table(data=new_data2, columns = ["Gene Count", "Count"])
         wandb.log({"count_genecount" : wandb.plot.bar(table, "Gene Count", "Count",
                                title="Amount at gene count")})
+        table = wandb.Table(data=new_data3, columns = ["Gene Count", "Pathogenic", "NoPathogenic"])
+        wandb.log({"labelP_genecount" : wandb.plot.bar(table, "Gene Count", "Pathogenic",
+                               title="Amount Label Pathogenic")})
+        wandb.log({"labelN_genecount" : wandb.plot.bar(table, "Gene Count", "NoPathogenic",
+                               title="Amount Label NoPathogenic")})
+        table = wandb.Table(data=new_data4, columns = ["Gene Count", "Pathogenic", "NoPathogenic"])
+        wandb.log({"predictionsP_genecount" : wandb.plot.bar(table, "Gene Count", "Pathogenic",
+                               title="Amount Predicted Pathogenic")})
+        wandb.log({"predictionsN_genecount" : wandb.plot.bar(table, "Gene Count", "NoPathogenic",
+                               title="Amount Predicted NoPathogenic")})
+
 
     def calculate_loss(self, predictions_logit, labels):
         predictions = torch.sigmoid(predictions_logit)
