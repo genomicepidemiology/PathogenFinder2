@@ -21,11 +21,13 @@ class CNBlock(nn.Module):
             norm_layer = partial(nn.LayerNorm, eps=1e-6)
         self.block = nn.Sequential(
             nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size//2, groups=dim, bias=False),
+            Permute([0,2,1]),
             norm_layer(dim),
-            nn.Conv1d(dim, dim*CNBlock.multiply_factor, kernel_size=1, padding=1//2, bias=False),
+            Permute([0, 2, 1]),
+            nn.Conv1d(dim, dim*CNBlock.multiply_factor, kernel_size=1, stride=1, padding=0, bias=False),
             nn.GELU(),
-            nn.Conv1d(dim*CNBlock.multiply_factor, dim, kernel_size=1, padding=1//2, bias=False),
-        )
+            nn.Conv1d(dim*CNBlock.multiply_factor, dim, kernel_size=1, stride=1, padding=0, bias=False),
+            )
         self.layer_scale = nn.Parameter(torch.ones(dim, 1) * layer_scale)
         self.stochastic_depth = StochasticDepth(stochastic_depth_prob, "row")
 

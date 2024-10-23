@@ -88,10 +88,12 @@ class Train_NeuralNet():
         if scheduler_type == "OneCycleLR":
             scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
                                     max_lr=max_lr, final_div_factor=end_lr,
-                                    epochs=epochs, steps_per_epoch=steps,
+                                    epochs=epochs, steps_per_epoch=steps, pct_start=0.2,
                                     )
         elif scheduler_type == "ReduceLROnPlateau":
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=15, min_lr=1e-6)
+        elif scheduler_type == "MultiStepLR":
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40, 55, 70, 80, 90, 95], gamma=0.5)
         else:
             raise ValueError("The scheduler type {} is not available".format(scheduler_type))
         return scheduler
@@ -188,6 +190,8 @@ class Train_NeuralNet():
                 self.scaler.step(self.optimizer)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
             self.scaler.update()
+            if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
+                self.update_scheduler()
             #  computing loss
             loss_c = loss.detach()
             pred_c = predictions.detach()
@@ -209,8 +213,6 @@ class Train_NeuralNet():
             labels_tensor = (labels_tensor+1)/2
 
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
-        if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
-            self.update_scheduler()
         return loss_pass, mcc_pass, lr_rate_lst, profiler
 
     def val_pass(self, val_loader, batch_size, profiler=None, asynchronity=False):
@@ -279,7 +281,7 @@ class Train_NeuralNet():
 
     def __call__(self, train_dataset, val_dataset, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
             lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False, stratified=False,
-            fused_OptBack=False, clipping=False, bucketing=False, warmup_period=False, early_stopping=True, keep_model=False):
+            fused_OptBack=False, clipping=False, bucketing=False, warmup_period=False, early_stopping=True, keep_model=False, evaluate_train=True):
 
 
         pos_weight = train_dataset.get_weights()
@@ -290,6 +292,9 @@ class Train_NeuralNet():
         train_loader = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
         val_loader = NN_Data.load_data(val_dataset, batch_size, num_workers=num_workers,
+                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=False)
+        if evaluate_train:
+            train_loader_eval = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=False)
 
 
@@ -312,14 +317,19 @@ class Train_NeuralNet():
             #  validation
             print('validating...')
             loss_val, mcc_v, profiler = self.val_pass(val_loader=val_loader, asynchronity=asynchronity, batch_size=batch_size)
+            if evaluate_train:
+                loss_train_eval, mcc_train_eval, _ = self.val_pass(val_loader=train_loader_eval, asynchronity=asynchronity, batch_size=batch_size)
+            else:
+                loss_train_eval, mcc_train_eval = None, None
 
             self.results_training.add_epoch_info(epoch=epoch, loss_t=loss_train, loss_v=loss_val, 
-                                                   mcc_t=mcc_t, mcc_v=mcc_v)
+                                                   mcc_t=mcc_t, mcc_v=mcc_v, loss_t_eval=loss_train_eval,
+                                                   mcc_t_eval=mcc_train_eval)
 
             if keep_model == "best_epoch":
                 self.saved_model = self.best_epoch_retain(new_val=mcc_v, optimizer=self.optimizer, model=self.network, epoch=epoch, loss=loss_train)
 
-            if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
+            if self.lr_scheduler is not None and (self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau" or self.lr_scheduler.__class__.__name__ == "MultiStepLR"):
                 self.update_scheduler(value=loss_val)
             end_e_time = time.time()
             self.results_training.add_time_info(end_e_time-start_e_time)

@@ -34,11 +34,16 @@ class SinusoidalPositionEmbeddings(nn.Module):
         embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
         return embeddings
 
-class LayerNorm1d(nn.LayerNorm):
+class LayerNorm1d_old(nn.LayerNorm):
     def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 1)
         x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = x.permute(0, 2, 1)
+        return x
+
+class LayerNorm1d(nn.LayerNorm):
+    def forward(self, x:Tensor) -> Tensor:
+        x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         return x
 
 class Permute(nn.Module):

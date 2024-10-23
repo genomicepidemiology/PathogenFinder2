@@ -6,8 +6,11 @@ from .utils import LayerNorm1d, SinusoidalPositionEmbeddings, Permute
 
 class Classifier(nn.Module):
 
-    def __init__(self, dim, num_classes, length_information, length_dim=None):
+    def __init__(self, dim, num_classes, length_information, length_dim=None, dropout_embed=0.2):
         super(Classifier, self).__init__()
+
+        if not length_dim or length_dim == None:
+            length_dim = dim//7
 
         if not length_information:
             self.length_information = False
@@ -17,6 +20,7 @@ class Classifier(nn.Module):
                 SinusoidalPositionEmbeddings(length_dim),
                 nn.Linear(length_dim, dim),
                 nn.GELU(),
+  #              nn.Dropout(dropout_embed),
                 nn.Linear(dim, dim),
                 Permute([0, 2, 1]),
                 )
@@ -40,7 +44,11 @@ class Classifier(nn.Module):
             x = x + self.length_step(t)
         elif self.length_information == "concat1":
             x = torch.concat((x, self.length_step(t)), axis=1)
-        x = self.flatten(self.norm_layer(x))
+        else:
+            x = x
+        print("PRE", x.shape)
+        x = self.norm_layer(x)
+        print("Post",x.shape)
         x = self.linear_out(x)
         return x
         

@@ -68,6 +68,7 @@ class ConfigModel:
         self.train_parameters = self.init_train_parameters()
         self.pred_parameters = self.init_pred_parameters()
         self.test_parameters = self.init_test_parameters()
+        self.hyperopt_parameters = self.init_hyperopt_parameters()
 
 
     def init_misc_parameters(self):
@@ -88,7 +89,7 @@ class ConfigModel:
         train_parameters = ParamsModel(name_params="Train Parameters")
         train_parameters.init_params(
                 list_params=["optimizer", "learning_rate","norm_scale", "stochastic_depth_prob",
-                    "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler",
+                    "epochs", "imbalance_sample", "imbalance_weight", "lr_scheduler", "train_eval",
                     "weight_decay", "lr_end", "fused_OptBack", "clipping", "num_workers",
                     "mix_prec", "asynchronity", "data_sample", "cluster_tsv", "prot_dim_split",
                     "loss_function", "train_df", "train_loc", "val_df", "val_loc", "early_stopping",
@@ -107,6 +108,11 @@ class ConfigModel:
         test_parameters.init_params(
                 list_params=["test_df", "test_loc"])
         return test_parameters
+    def init_hyperopt_parameters(self):
+        hyperopt_parameters = ParamsModel(name_params="HyperparameterOptimization Parameters")
+        hyperopt_parameters.init_params(
+                list_params=["train_df", "val_df", "optimizing_parameters", "name_study"])
+        return hyperopt_parameters
 
     def standard_init_model(self):
         self.model_parameters.set_param(param="saved_model", value=False, type_d=bool)

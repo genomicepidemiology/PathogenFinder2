@@ -71,7 +71,7 @@ class Test_NeuralNet:
     def __call__(self, test_dataset, asynchronity, num_workers, batch_size, report_att, bucketing, stratified, return_layer=False):
 
         start_time = time.time()
- #       batch_size = 1
+        batch_size = 1
 
         test_loader = NN_Data.load_data(test_dataset, batch_size, num_workers=num_workers, stratified=False,
                                              shuffle=True, pin_memory=asynchronity, bucketing=bucketing, drop_last=True)
@@ -143,8 +143,8 @@ class Test_NeuralNet:
             labels_tensor = labels_tensor[:,0] - labels_tensor[:, 1]
             labels_tensor = (labels_tensor+1)/2
         else:
-            pred_tensor = pred_tensor
-            labels_tensor = labels_tensor
+            pred_tensor = pred_tensor.squeeze()
+            labels_tensor = labels_tensor.squeeze()
         results_df["Predictions (Label)"] = 0
         results_df["Correct Label"] = labels_tensor.tolist()
         results_df["Predictions"] =  pred_tensor.tolist()
@@ -192,6 +192,13 @@ class Test_NeuralNet:
             new_data2.append(["{}-{}".format(init_count, last_count), len(length_range)])
             new_data3.append(["{}-{}".format(init_count, last_count), sum(length_range["Correct Label"]==1), sum(length_range["Correct Label"]==0)])
             new_data4.append(["{}-{}".format(init_count, last_count), sum(length_range["Predictions (Label)"]==1), sum(length_range["Predictions (Label)"]==0)])
+            try:
+                cm_display, roc_display, pr_display, det_display = self.get_graphs(data=length_range)
+            except ValueError:
+                init_count += ranges
+                continue
+            self.make_graph(display=cm_display, name_file="confusion_matrix_range{}-{}".format(init_count, last_count),
+                                title="Confusion Matrix (Range {}-{})".format(init_count, last_count))
             init_count += ranges
         table = wandb.Table(data=new_data, columns = ["Gene Count", "MCC"])
         wandb.log({"mcc_genecount" : wandb.plot.bar(table,"Gene Count", "MCC",

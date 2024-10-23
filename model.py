@@ -106,7 +106,6 @@ class Compile_Model:
     def set_model_convnext(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
                                     num_classes=self.config.model_parameters["out_dim"],
-                                    num_blocks=self.config.model_parameters["model_structure"]["num_blocks"],
                                     block_dims=self.config.model_parameters["model_structure"]["block_dims"],
                                     downsample=self.config.model_parameters["model_structure"]["downsample"],
                                     stochastic_depth_prob=self.config.train_parameters["stochastic_depth_prob"],
@@ -119,13 +118,13 @@ class Compile_Model:
     def set_model_convnext_additiveatt(self):
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
                                     num_classes=self.config.model_parameters["out_dim"],
-                                    num_blocks=self.config.model_parameters["model_structure"]["num_blocks"],
                                     block_dims=self.config.model_parameters["model_structure"]["block_dims"],
                                     stochastic_depth_prob=self.config.train_parameters["stochastic_depth_prob"],
                                     attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
                                     attention_norm=self.config.model_parameters["model_structure"]["att_norm"],
                                     dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
                                     layer_scale=self.config.train_parameters["norm_scale"],
+                                    residual_attention=self.config.model_parameters["model_structure"]["residual_attention"],
                                     sequence_dropout=self.config.model_parameters["sequence_dropout"],
                                     norm=self.config.model_parameters["norm"],
                                     length_information=self.config.model_parameters["length_information"],
@@ -320,7 +319,8 @@ class Compile_Model:
                             stratified=self.config.train_parameters["stratified"],
                             warmup_period=self.config.train_parameters["warm_up"],
                             early_stopping=self.config.train_parameters["early_stopping"],
-                            keep_model=self.config.train_parameters["save_model"])
+                            keep_model=self.config.train_parameters["save_model"],
+                            evaluate_train=self.config.train_parameters["train_eval"])
 
         self.config.model_parameters["train_status"] = "Done"
 
@@ -376,11 +376,11 @@ class Compile_Model:
                             batch_size=self.config.model_parameters["batch_size"], report_att=report_att, return_layer="avgpool")
 
     def hyperparam_sel(self):
-        from hyperparam_sel import HyperParameter_Opt
+        from hyperparam_opt import Hyper_Optimizer
 
 #        if self.model is None:
         dual_pred = self.is_dual()
-        hyper_instance = HyperParameter_Opt(network=self.model, configuration=self.config,
+        hyper_instance = Hyper_Optimizer(configuration=self.config,
                             loss_function=self.config.train_parameters["loss_function"],
                             results_dir=self.results_dir,
                             swa_iter=self.config.train_parameters["swa"],
@@ -434,8 +434,8 @@ if __name__ == "__main__":
         compiled_model.predict_model()
     if model_arguments.test:
  #       compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
-        compiled_model.load_model("/work3/alff/results_pathogenfinder2/ConvNextAtt_dual_3blocks_addlen_09-10-2024_15-25-01", type_load="checkpoint")
-   #     compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext512126_addatt512Model2D_01-10-2024_18-01-58", type_load="checkpoint")
+ #       compiled_model.load_model("/work3/alff/results_pathogenfinder2/ConvNextAtt_dual_3blocks_addlen_09-10-2024_15-25-01", type_load="checkpoint")
+        compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/TRAIN_nolen_OneCycleLR13_lr1-3_22-10-2024_16-48-07", type_load="checkpoint")
  #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_18-09-2024_17-07-53", type_load="checkpoint")
         compiled_model.test_model()
 

@@ -30,12 +30,19 @@ class Wandb_Results:
         self.step_wandb = 0
         self.epoch_n = 0
 
-    def add_epoch_info(self, loss_t, loss_v, epoch, mcc_t, mcc_v):
+    def add_epoch_info(self, loss_t, loss_v, epoch, mcc_t, mcc_v, loss_t_eval=None, mcc_t_eval=None):
 
-        log_results = {"Training Loss": loss_t,
-                   "Validation Loss": loss_v, "Training MCC": mcc_t,
-                   "Validation MCC": mcc_v, "Epoch": epoch
-                   }
+        if loss_t_eval is None:
+            log_results = {"Training Loss": loss_t,
+                       "Validation Loss": loss_v, "Training MCC": mcc_t,
+                       "Validation MCC": mcc_v, "Epoch": epoch
+                       }
+        else:
+            log_results = {"Training Loss": loss_t,
+                       "Validation Loss": loss_v, "Training MCC": mcc_t,
+                       "Validation MCC": mcc_v, "Epoch": epoch,
+                       "Training Loss Eval": loss_t_eval, "Training MCC Eval": mcc_t_eval
+                       }
  #       print(log_reults)
         wandb.log(log_results, step=self.step_wandb)
         self.epoch_n += 1

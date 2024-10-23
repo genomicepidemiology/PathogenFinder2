@@ -16,7 +16,6 @@ class ConvNet_AddAtt_Net(nn.Module):
         self,
         input_dim: int,
         block_dims: list,
-        num_blocks: int,
         attention_dim: int,
         dropout_att: float,
         stem_cell: bool = True,
@@ -24,6 +23,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         length_information = False,
         length_dim = None,
         attention_type: str = "Bahdanau",
+        residual_attention: bool = False,
         stochastic_depth_prob: float = 0.0,
         layer_scale: float = 1e-6,
         num_classes: int = 1,
@@ -32,7 +32,6 @@ class ConvNet_AddAtt_Net(nn.Module):
         ) -> None:
         super().__init__()
 
-#        assert num_blocks == len(block_dims)
 
         self.input_dropout = nn.Dropout1d(sequence_dropout)
         self.num_classes = num_classes
@@ -44,19 +43,16 @@ class ConvNet_AddAtt_Net(nn.Module):
         else:
             norm_layer = None
 
-        self.stage_block_id = 0
+        self.stage_block_id = 1
         self.stochastic_depth_prob = stochastic_depth_prob
-        self.num_blocks = ConvNet_AddAtt_Net.get_blocks(block_dims, stem_cell)
-
+        self.num_blocks = len(block_dims) + 1 + 1
+      
         # Stem
         if stem_cell:
             self.stem_cell = self.create_stemcell(input_dim=input_dim,
                                     output_dim=block_dims[0], norm_layer=norm_layer)
         else:
             self.stem_cell = False
-
-        sdvalue_stem_cell = self.get_sd_prob()
-        self.sd_stem_cell = StochasticDepth(sdvalue_stem_cell, "row")
 
         self.features = nn.ModuleList()
 
@@ -67,27 +63,40 @@ class ConvNet_AddAtt_Net(nn.Module):
             sd_prob = self.get_sd_prob()
             cnblock = self.create_block(dim=dim_block, norm_layer=norm_layer, sd_prob=sd_prob, layer_scale=layer_scale)
             self.features.append(cnblock)
-
             if n != len(block_dims)-1 and dim_block != block_dims[n+1]:
                 downsample = self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer)
                 self.features.append(downsample)
 
-        self.att_norm = norm_layer(block_dims[-1])
+        self.apply(self._init_weights)
+
+        att_sd = self.get_sd_prob()
+        self.residual_attention = residual_attention
         self.attention_layer = Attention_Methods(attention_type=attention_type,
                                                         dimensions_in=block_dims[-1],
                                                         attention_dim=attention_dim,
                                                         norm_layer=attention_norm,
-                                                        dropout=dropout_att)
-        att_stochastic_depth = self.get_sd_prob()
-        self.stochastic_depth_att = StochasticDepth(att_stochastic_depth, "row")
+                                                        dropout=dropout_att,
+                                                        residual_attention=residual_attention,
+                                                        stochastic_depth_prob=att_sd, layer_scale=layer_scale)
+
+        if self.residual_attention:
+            self.stochastic_depth_att = None
+        else:
+            self.stochastic_depth_att = StochasticDepth(att_sd, "row")
+
 
         self.classifier = Classifier(block_dims[-1], num_classes, length_information, length_dim)
 
-        for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.Linear)):
-                nn.init.trunc_normal_(m.weight, std=0.02)
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
+        head_init_scale = 1
+        #self.apply(self._init_weights)
+        self.classifier.linear_out.weight.data.mul_(head_init_scale)
+        self.classifier.linear_out.bias.data.mul_(head_init_scale)
+
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Conv1d, nn.Linear)):
+            nn.init.trunc_normal_(m.weight, std=.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     @staticmethod
     def get_blocks(block_dims, stem_cell):
@@ -108,9 +117,11 @@ class ConvNet_AddAtt_Net(nn.Module):
         return sd_prob
 
     def create_downsample(self, dim_in:int, dim_out:int, norm_layer:nn.Module) -> nn.Module:
-        return nn.Sequential(norm_layer(dim_in),
-                                nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False),
-                                StochasticDepth(self.get_sd_prob(), "row")
+        return nn.Sequential(
+                            Permute([0,2,1]),
+                            norm_layer(dim_in),
+                            Permute([0,2,1]),
+                            nn.Conv1d(dim_in, dim_out, kernel_size=1, stride=1, padding=0, bias=False),
                                 )
 
     def create_block(self, dim:int, norm_layer:nn.Module, sd_prob:float, layer_scale:float) -> nn.Module:
@@ -121,7 +132,9 @@ class ConvNet_AddAtt_Net(nn.Module):
         stemcell = nn.Sequential(
                     Permute([0, 2, 1]),
                     nn.Conv1d(input_dim, output_dim, kernel_size=1, bias=False),
+                    Permute([0, 2, 1]),
                     norm_layer(output_dim),
+                    Permute([0, 2, 1])
                     )
         return stemcell
 
@@ -142,16 +155,16 @@ class ConvNet_AddAtt_Net(nn.Module):
         mask = utils.create_mask(seq_lengths=lengths, dimensions_batch=x.shape)
         x = self.input_dropout(x)
         x = self.stem_cell(x)
-        x = self.sd_stem_cell(x)
         x = x.masked_fill(mask, 0)
         for layer in self.features:
             x = layer(x)
             x = x.masked_fill(mask, 0)
- #       x = self.att_norm(x)
-        x = torch.permute(x, (0, 2, 1))
-        x, attentions = self.attention_layer(x, mask)
-        x = self.stochastic_depth_att(x)
-        x = torch.unsqueeze(x, -1)
+        x, attentions = self.attention_layer(x, mask, lengths)
+        if not self.residual_attention:
+            x = self.stochastic_depth_att(x)
+        print("PresQueeze", x.shape)
+        x = torch.squeeze(x,dim=-1)
+        print("PostSqueeze", x.shape)
         x = self.classifier(x, lengths)
         return x, attentions
 
