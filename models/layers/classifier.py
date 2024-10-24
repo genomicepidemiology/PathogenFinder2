@@ -20,7 +20,6 @@ class Classifier(nn.Module):
                 SinusoidalPositionEmbeddings(length_dim),
                 nn.Linear(length_dim, dim),
                 nn.GELU(),
-  #              nn.Dropout(dropout_embed),
                 nn.Linear(dim, dim),
                 Permute([0, 2, 1]),
                 )
@@ -46,9 +45,7 @@ class Classifier(nn.Module):
             x = torch.concat((x, self.length_step(t)), axis=1)
         else:
             x = x
-        print("PRE", x.shape)
         x = self.norm_layer(x)
-        print("Post",x.shape)
         x = self.linear_out(x)
         return x
         

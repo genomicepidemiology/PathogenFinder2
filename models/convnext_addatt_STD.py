@@ -162,9 +162,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         x, attentions = self.attention_layer(x, mask, lengths)
         if not self.residual_attention:
             x = self.stochastic_depth_att(x)
-        print("PresQueeze", x.shape)
         x = torch.squeeze(x,dim=-1)
-        print("PostSqueeze", x.shape)
         x = self.classifier(x, lengths)
         return x, attentions
 

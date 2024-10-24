@@ -328,9 +328,12 @@ class Train_NeuralNet():
 
             if keep_model == "best_epoch":
                 self.saved_model = self.best_epoch_retain(new_val=mcc_v, optimizer=self.optimizer, model=self.network, epoch=epoch, loss=loss_train)
-
-            if self.lr_scheduler is not None and (self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau" or self.lr_scheduler.__class__.__name__ == "MultiStepLR"):
-                self.update_scheduler(value=loss_val)
+            print(self.lr_scheduler.__class__.__name__, self.optimizer.param_groups[-1]['lr'])
+            if self.lr_scheduler is not None:
+                if self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
+                    self.update_scheduler(value=loss_val)
+                elif self.lr_scheduler.__class__.__name__ == "MultiStepLR":
+                    self.update_scheduler()
             end_e_time = time.time()
             self.results_training.add_time_info(end_e_time-start_e_time)
             print("training_loss: {}, validation_loss: {} // training_mcc: {}, validation_mcc: {} ".format(loss_train, loss_val, mcc_t, mcc_v))
