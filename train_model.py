@@ -21,6 +21,8 @@ from utils import NNUtils, EarlyStopping, Metrics
 
 class Train_NeuralNet():
     MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
+    MAX_BATCH_SIZE = 64
+    MIN_BATCH_SIZE = 8
 
     def __init__(self, network, configuration=None, loss_function=None, results_dir=None, memory_report=False, 
 		compiler=False, mixed_precision=False, results_module=None, wandb_report=False, swa_iter=False):
@@ -91,9 +93,10 @@ class Train_NeuralNet():
                                     epochs=epochs, steps_per_epoch=steps, pct_start=0.2,
                                     )
         elif scheduler_type == "ReduceLROnPlateau":
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=15, min_lr=1e-6)
+#            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=15, min_lr=1e-6)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min")
         elif scheduler_type == "MultiStepLR":
-            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40, 55, 70, 80, 90, 95], gamma=0.5)
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 15, 55, 70, 80, 90, 95], gamma=0.5)
         else:
             raise ValueError("The scheduler type {} is not available".format(scheduler_type))
         return scheduler
@@ -134,7 +137,6 @@ class Train_NeuralNet():
     def update_scheduler(self, value=False):
         if self.warmup is not None:
             with self.warmup["scheduler"].dampening():
-                print(self.warmup["scheduler"].last_step, self.warmup["period"])
                 if self.warmup["scheduler"].last_step + 1 >= self.warmup["period"]:
                     self.scheduler_step(value=value)
         else:
@@ -145,7 +147,7 @@ class Train_NeuralNet():
         optimizer_dict[parameter].step()
         optimizer_dict[parameter].zero_grad()
     
-    def train_pass(self, train_loader, batch_size, profiler=None, asynchronity=False, clipping=False):
+    def train_pass(self, train_loader, batch_size, accumulate_gradient=False, profiler=None, asynchronity=False, clipping=False):
         
         self.network.train()
         
@@ -157,8 +159,10 @@ class Train_NeuralNet():
         labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
         pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
         batch_n = 0
-
-        for batch in tqdm(train_loader):
+        
+        self.optimizer.zero_grad(set_to_none=True)
+        
+        for idx, batch in tqdm(enumerate(train_loader)):
             pos_first, pos_last = count, count+batch_size
             if self.profiler is not None:
                 self.profiler.step()
@@ -170,12 +174,15 @@ class Train_NeuralNet():
             labels = labels.to(self.device, non_blocking=asynchronity)
             lengths = lengths.to(self.device, non_blocking=asynchronity)
             #  resetting gradients
-            self.optimizer.zero_grad(set_to_none=True)
+        #    self.optimizer.zero_grad(set_to_none=True)
             #  making predictions
             with torch.autocast(device_type=self.device, enabled=self.mixed_precision):
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(
                                         predictions_logit=predictions_logit, labels=labels)
+
+            if accumulate_gradient:
+                loss = loss/accumulate_gradient
             #  computing gradients
             self.scaler.scale(loss).backward()
             if clipping:
@@ -183,11 +190,13 @@ class Train_NeuralNet():
                 self.scaler.unscale_(self.optimizer)
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), clipping)
-            #  updating weights
-            if isinstance(self.optimizer, dict):
-                pass
-            else:
-                self.scaler.step(self.optimizer)
+            if not accumulate_gradient or ((idx + 1) % accumulate_gradient == 0) or (idx + 1 == len(dataloader)):
+                #  updating weights
+                if isinstance(self.optimizer, dict):
+                    pass
+                else:
+                    self.scaler.step(self.optimizer)
+                self.optimizer.zero_grad(set_to_none=True)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
             self.scaler.update()
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
@@ -277,6 +286,35 @@ class Train_NeuralNet():
         else:
             return self.saved_model
 
+
+    def set_sensible_batch_size(self, batch_size):
+        if batch_size < Train_NeuralNet.MIN_BATCH_SIZE:
+            raise ValueError("The batch size {} is smaller than the minimum allowed ({})".format(
+                                                                batch_size, Train_NeuralNet.MIN_BATCH_SIZE))
+
+        min_batch = 0 + Train_NeuralNet.MIN_BATCH_SIZE
+        accumulated_gradient = batch_size / min_batch
+        pre_min_batch = min_batch
+        pre_accumul = accumulated_gradient
+        while True:
+            if pre_min_batch > Train_NeuralNet.MAX_BATCH_SIZE:
+                break
+            elif not pre_accumul.is_integer():
+                pass
+            elif pre_min_batch == Train_NeuralNet.MAX_BATCH_SIZE:
+                accumulated_gradient = pre_accumul
+                min_batch = pre_min_batch
+                break
+            else:
+                accumulated_gradient = pre_accumul
+                min_batch = pre_min_batch
+            pre_min_batch += Train_NeuralNet.MIN_BATCH_SIZE
+            pre_accumul = batch_size / pre_min_batch
+        if accumulated_gradient is None or not accumulated_gradient.is_integer():
+            raise ValueError("Batch size {} is not a multiple of 8".format(batch_size))
+        return min_batch, accumulated_gradient
+
+                   
        
 
     def __call__(self, train_dataset, val_dataset, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
@@ -287,6 +325,11 @@ class Train_NeuralNet():
         pos_weight = train_dataset.get_weights()
 
         self.loss_function = self.loss()
+
+        if batch_size > Train_NeuralNet.MAX_BATCH_SIZE:
+            batch_size, accumulate_gradient = self.set_sensible_batch_size(batch_size)
+        else:
+            accumulate_gradient = False
 
         #  creating dataloaders
         train_loader = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,

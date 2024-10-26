@@ -81,7 +81,7 @@ class ConfigModel:
         model_parameters = ParamsModel(name_params="Model Parameters")
         model_parameters.init_params(
                 list_params=["batch_size", "model_name", "model_structure",  "out_dim", "out_init",
-                    "out_sigmoid", "norm", "train_status", "saved_model", 
+                    "out_sigmoid", "norm", "train_status", "saved_model", "seed",
                     "mode", "input_dim", "input_type", "length_information", "length_dim","sequence_dropout"])
         return model_parameters
 
@@ -109,9 +109,10 @@ class ConfigModel:
                 list_params=["test_df", "test_loc"])
         return test_parameters
     def init_hyperopt_parameters(self):
-        hyperopt_parameters = ParamsModel(name_params="HyperparameterOptimization Parameters")
+        hyperopt_parameters = ParamsModel(name_params="Hyperparam_Opt Params")
         hyperopt_parameters.init_params(
-                list_params=["train_df", "val_df", "optimizing_parameters", "name_study"])
+                list_params=["train_df", "val_df", "optimizing_parameters", "name_study", "group", "load_study",
+                                "min_epochs", "storage", "train_loc", "val_loc"])
         return hyperopt_parameters
 
     def standard_init_model(self):
@@ -180,6 +181,8 @@ class ConfigModel:
                     self.pred_parameters.set_param(param=k, value=val)
                 elif params == "Test Params":
                     self.test_parameters.set_param(param=k, value=val)
+                elif params == "Hyperparam_Opt Params":
+                    self.hyperopt_parameters.set_param(param=k, value=val)
     
     def save_data(self, file_save):
         data_save = {"Model Params": dict(self.model_parameters),

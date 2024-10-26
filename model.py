@@ -11,6 +11,7 @@ import gc
 import os
 import pandas as pd
 import numpy as np
+import random
 import sys
 from datetime import datetime
 from torch.optim import swa_utils
@@ -46,6 +47,11 @@ class Compile_Model:
 
         self.config = ConfigModel(model_type=model_arguments.model_type)
 
+        if self.config.model_parameters["seed"]:
+            torch.manual_seed(self.config.model_parameters["seed"])
+            random.seed(self.config.model_parameters["seed"])
+            np.random.seed(self.config.model_parameters["seed"])
+
         if model_arguments.json_INdata:
             self.load_json(json_file=model_arguments.json_INdata)
         else:
@@ -55,8 +61,6 @@ class Compile_Model:
         self.model_name = self.config.model_parameters["model_name"]
         self.model_carcass = self.get_model_carcass(model_type=self.model_name)
 
-        self.set_model()
-        print(self.model)
 
         self.results_dir = NNUtils.set_results_files(
 				results_dir=self.config.train_parameters["results_dir"])
@@ -266,6 +270,8 @@ class Compile_Model:
         return hp_model, hp_train
         
     def train_model(self, report="dictionary"):
+        self.set_model()
+
         if self.model is None:
             raise ValueError("Set the Model First")
         if report not in ["dictionary", "wandb", "tensorboard"]:
@@ -333,6 +339,8 @@ class Compile_Model:
             return False
 
     def predict_model(self):
+        self.set_model()
+
         if self.model is None:
             raise ValueError("Set the Model First")
 
@@ -348,6 +356,8 @@ class Compile_Model:
         prediction_instance(pred_dataset=pred_dataset)
 
     def test_model(self):
+        self.set_model()
+
         if self.model is None:
             raise ValueError("Set the Model First")
 
@@ -378,16 +388,25 @@ class Compile_Model:
     def hyperparam_sel(self):
         from hyperparam_opt import Hyper_Optimizer
 
+
 #        if self.model is None:
         dual_pred = self.is_dual()
-        hyper_instance = Hyper_Optimizer(configuration=self.config,
+        print(self.config.hyperopt_parameters.keys())
+        hyper_instance = Hyper_Optimizer(config=self.config, network=self.model_carcass,
+                            study_name=self.config.hyperopt_parameters["name_study"],
+                            group=self.config.hyperopt_parameters["group"],
+                            results_folder=self.results_dir,
+                            load_study=self.config.hyperopt_parameters["load_study"],
+                            storage=self.config.hyperopt_parameters["storage"],
+                            min_epochs=self.config.hyperopt_parameters["min_epochs"],
                             loss_function=self.config.train_parameters["loss_function"],
-                            results_dir=self.results_dir,
-                            swa_iter=self.config.train_parameters["swa"],
-                            memory_report=self.config.train_parameters["memory_report"],
                             mixed_precision=self.config.train_parameters["mix_prec"],
-                            compiler=self.config.train_parameters["compiler"],
-                            wandb_report=self.results_model)
+                            )
+#        hyper_instance.add_advice(advice=advice)
+        hyper_instance.run_optimization(n_trials=50, timeout=600)
+        hyper_instance.report_optimization()
+        hyper_instance.visualization()
+        hyper_instance.run_save()
 
         # Create Train data
         train_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
