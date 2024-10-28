@@ -31,6 +31,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         num_classes: int = 1,
         norm: str = "Layer",
         attention_norm: bool = False,
+        head_init_scale: float = 0.001
         ) -> None:
         super().__init__()
 
@@ -97,7 +98,6 @@ class ConvNet_AddAtt_Net(nn.Module):
 
         self.classifier = Classifier(inclass_dim, num_classes, length_information, length_dim)
 
-        head_init_scale = 1
         self.classifier.linear_out.weight.data.mul_(head_init_scale)
         self.classifier.linear_out.bias.data.mul_(head_init_scale)
 
