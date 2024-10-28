@@ -61,12 +61,11 @@ class Attention_Methods(nn.Module):
         projection = torch.tanh(query + key)
         projection = projection.permute(0, 2, 1)
         weights = self.score_proj(projection)
-        weights = self.dropout(weights)
         weights = weights.squeeze(2).unsqueeze(1)
 
         weights = weights.masked_fill(mask, -float("inf"))
 
-        att = torch.nn.functional.softmax(weights, dim=-1)
+        att = self.dropout(torch.nn.functional.softmax(weights, dim=-1))
         attention_result = torch.bmm(att, x_in).squeeze(1).unsqueeze(2)
         return attention_result, att
 

@@ -93,8 +93,7 @@ class Train_NeuralNet():
                                     epochs=epochs, steps_per_epoch=steps, pct_start=0.2,
                                     )
         elif scheduler_type == "ReduceLROnPlateau":
-#            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=15, min_lr=1e-6)
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min")
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=20)
         elif scheduler_type == "MultiStepLR":
             scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 15, 55, 70, 80, 90, 95], gamma=0.5)
         else:
@@ -195,6 +194,7 @@ class Train_NeuralNet():
                 if isinstance(self.optimizer, dict):
                     pass
                 else:
+                    print("UPDATED WEIGHTS", idx)
                     self.scaler.step(self.optimizer)
                 self.optimizer.zero_grad(set_to_none=True)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])

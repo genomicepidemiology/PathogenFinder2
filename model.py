@@ -123,6 +123,7 @@ class Compile_Model:
         self.model = self.model_carcass(input_dim=self.config.model_parameters["input_dim"],
                                     num_classes=self.config.model_parameters["out_dim"],
                                     block_dims=self.config.model_parameters["model_structure"]["block_dims"],
+                                    fnn_dim=self.config.model_parameters["model_structure"]["fnn_dim"],
                                     stochastic_depth_prob=self.config.train_parameters["stochastic_depth_prob"],
                                     attention_dim=self.config.model_parameters["model_structure"]["att_dim"],
                                     attention_norm=self.config.model_parameters["model_structure"]["att_norm"],
@@ -452,9 +453,9 @@ if __name__ == "__main__":
         compiled_model.load_model(compiled_model.results_dir)
         compiled_model.predict_model()
     if model_arguments.test:
- #       compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
+        compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
  #       compiled_model.load_model("/work3/alff/results_pathogenfinder2/ConvNextAtt_dual_3blocks_addlen_09-10-2024_15-25-01", type_load="checkpoint")
-        compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/TRAIN_nolen_OneCycleLR13_lr1-3_22-10-2024_16-48-07", type_load="checkpoint")
+ #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/TRAIN_nolen_OneCycleLR13_lr1-3_22-10-2024_16-48-07", type_load="checkpoint")
  #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_18-09-2024_17-07-53", type_load="checkpoint")
         compiled_model.test_model()
 

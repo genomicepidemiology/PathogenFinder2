@@ -18,6 +18,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         block_dims: list,
         attention_dim: int,
         dropout_att: float,
+        fnn_dim = None,
         stem_cell: bool = True,
         sequence_dropout: float = 0.3,
         length_information = False,
@@ -25,6 +26,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         attention_type: str = "Bahdanau",
         residual_attention: bool = False,
         stochastic_depth_prob: float = 0.0,
+        stochastic_depth_att: bool = True,
         layer_scale: float = 1e-6,
         num_classes: int = 1,
         norm: str = "Layer",
@@ -45,7 +47,7 @@ class ConvNet_AddAtt_Net(nn.Module):
 
         self.stage_block_id = 1
         self.stochastic_depth_prob = stochastic_depth_prob
-        self.num_blocks = len(block_dims) + 1 + 1
+        self.num_blocks = 1+ len(block_dims) + int(stochastic_depth_att)
       
         # Stem
         if stem_cell:
@@ -80,15 +82,22 @@ class ConvNet_AddAtt_Net(nn.Module):
                                                         stochastic_depth_prob=att_sd, layer_scale=layer_scale)
 
         if self.residual_attention:
-            self.stochastic_depth_att = None
+            self.stochastic_depth_att = False
         else:
-            self.stochastic_depth_att = StochasticDepth(att_sd, "row")
+            if stochastic_depth_att:
+                self.stochastic_depth_att = StochasticDepth(att_sd, "row")
+            else:
+                self.stochastic_depth_att = False
+        if fnn_dim != 0:
+            self.fnn_out = nn.Sequential(norm_layer(block_dims[-1]), nn.Linear(block_dims[-1],fnn_dim))
+            inclass_dim = fnn_dim
+        else:
+            self.fnn_out = None
+            inclass_dim = block_dims[-1]
 
-
-        self.classifier = Classifier(block_dims[-1], num_classes, length_information, length_dim)
+        self.classifier = Classifier(inclass_dim, num_classes, length_information, length_dim)
 
         head_init_scale = 1
-        #self.apply(self._init_weights)
         self.classifier.linear_out.weight.data.mul_(head_init_scale)
         self.classifier.linear_out.bias.data.mul_(head_init_scale)
 
@@ -160,9 +169,11 @@ class ConvNet_AddAtt_Net(nn.Module):
             x = layer(x)
             x = x.masked_fill(mask, 0)
         x, attentions = self.attention_layer(x, mask, lengths)
-        if not self.residual_attention:
+        if not self.stochastic_depth_att and not self.residual_attention:
             x = self.stochastic_depth_att(x)
         x = torch.squeeze(x,dim=-1)
+        if self.fnn_out is not None:
+            x = self.fnn_out(x)
         x = self.classifier(x, lengths)
         return x, attentions
 
