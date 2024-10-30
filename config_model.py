@@ -112,7 +112,8 @@ class ConfigModel:
         hyperopt_parameters = ParamsModel(name_params="Hyperparam_Opt Params")
         hyperopt_parameters.init_params(
                 list_params=["train_df", "val_df", "optimizing_parameters", "name_study", "group", "load_study",
-                                "min_epochs", "storage", "train_loc", "val_loc"])
+                                "min_epochs_prune", "min_epochs_count", "storage", "train_loc", "val_loc",
+                                "try_params", "num_trials", "timeout"])
         return hyperopt_parameters
 
     def standard_init_model(self):

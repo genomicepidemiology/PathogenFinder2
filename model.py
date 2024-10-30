@@ -64,8 +64,8 @@ class Compile_Model:
 
         self.results_dir = NNUtils.set_results_files(
 				results_dir=self.config.train_parameters["results_dir"])
-        self.results_model = Wandb_Results(configuration=self.config,
-                                            name=os.path.basename(self.results_dir))
+#        self.results_model = Wandb_Results(configuration=self.config,
+ #                                           name=os.path.basename(self.results_dir))
 
     def get_model_carcass(self, model_type):
         if model_type == "conv1d_additiveatt":
@@ -272,7 +272,8 @@ class Compile_Model:
         
     def train_model(self, report="dictionary"):
         self.set_model()
-
+        self.results_model = Wandb_Results(configuration=self.config,
+                                             name=os.path.basename(self.results_dir))
         if self.model is None:
             raise ValueError("Set the Model First")
         if report not in ["dictionary", "wandb", "tensorboard"]:
@@ -342,6 +343,9 @@ class Compile_Model:
     def predict_model(self, load_model):
         self.set_model()
 
+        self.results_model = Wandb_Results(configuration=self.config,
+                                             name=os.path.basename(self.results_dir))
+
         if self.model is None:
             raise ValueError("Set the Model First")
 
@@ -358,7 +362,8 @@ class Compile_Model:
 
     def test_model(self, load_model, type_load):
         self.set_model()
-
+        self.results_model = Wandb_Results(configuration=self.config,
+                                             name=os.path.basename(self.results_dir))
         self.load_model(load_model, type_load=type_load)
 
         if self.model is None:
@@ -398,15 +403,20 @@ class Compile_Model:
         hyper_instance = Hyper_Optimizer(config=self.config, network=self.model_carcass,
                             study_name=self.config.hyperopt_parameters["name_study"],
                             group=self.config.hyperopt_parameters["group"],
-                            results_folder=self.results_dir,
+                            results_folder=self.results_dir, dual_pred=dual_pred,
                             load_study=self.config.hyperopt_parameters["load_study"],
                             storage=self.config.hyperopt_parameters["storage"],
-                            min_epochs=self.config.hyperopt_parameters["min_epochs"],
+                            min_epochs_prune=self.config.hyperopt_parameters["min_epochs_prune"],
+                            min_epochs_count=self.config.hyperopt_parameters["min_epochs_count"],
                             loss_function=self.config.train_parameters["loss_function"],
                             mixed_precision=self.config.train_parameters["mix_prec"],
+                            memory_report=self.config.train_parameters["memory_report"]
                             )
-#        hyper_instance.add_advice(advice=advice)
-        hyper_instance.run_optimization(n_trials=50, timeout=600)
+
+        if self.config.hyperopt_parameters["try_params"]:
+            hyper_instance.add_advice(self.config.hyperopt_parameters["try_params"])
+        hyper_instance.run_optimization(n_trials=self.config.hyperopt_parameters["num_trials"],
+                                         timeout=self.config.hyperopt_parameters["timeout"])
         hyper_instance.report_optimization()
         hyper_instance.visualization()
         hyper_instance.run_save()
@@ -421,15 +431,6 @@ class Compile_Model:
                             dual_pred=dual_pred,
                             weighted=self.config.train_parameters["imbalance_weight"],
                             normalize=self.config.train_parameters["normalize"],
-                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
-        # Create Val data
-        val_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
-                            data_df=self.config.train_parameters["val_df"],
-                            data_loc=self.config.train_parameters["val_loc"],
-                            data_type="prediction",
-                            cluster_sample=self.config.train_parameters["data_sample"],
-                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
-                            dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
                             fraction_embeddings=self.config.train_parameters["prot_dim_split"])
 
 

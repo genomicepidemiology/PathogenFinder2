@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import LambdaLR, OneCycleLR
 import pytorch_warmup as warmup
 from tqdm import tqdm
+import numpy as np
 import time
 import logging
 import joblib
@@ -35,21 +36,28 @@ GPU_per_Actor = 1
 
 class Hyper_Optimizer:
 
-    def __init__(self, network, config, study_name, device, NN, group,
-                    results_folder, load_study=False, storage=False,
-                    min_epochs=2, sampler=optuna.samplers.TPESampler(),
+    def __init__(self, network, config, study_name, group, dual_pred, memory_report,
+                    results_folder, loss_function, mixed_precision, load_study=False, storage=False,
+                    min_epochs_prune=4, min_epochs_count=2, sampler=optuna.samplers.TPESampler(),
                     pruner=optuna.pruners.SuccessiveHalvingPruner()):
+
+        assert min_epochs_prune > min_epochs_count
         self.study_name = study_name
         self.study = self.create_study(pruner, sampler, storage, load_study=load_study)
         self.results_folder = results_folder
-        self.device = device
-        self.num_NN = NN
+        self.device = NNUtils.get_device()
+        self.num_NN = len(config.hyperopt_parameters["train_df"])
         self.group = group
+        self.dual_pred = dual_pred
         self.wandbc = self.init_wandb(study_name)
         self.parameters = None
-        self.min_epochs = min_epochs
+        self.min_epochs_prune = min_epochs_prune
+        self.min_epochs_count = min_epochs_count
         self.network_base = network
         self.config = config
+        self.loss_function = loss_function
+        self.mixed_precision = mixed_precision
+        self.memory_report = memory_report
 
 
     def create_study(self, pruner, sampler, storage, load_study=False):
@@ -77,7 +85,13 @@ class Hyper_Optimizer:
                         wandb_kwargs=wandb_kwargs, as_multirun=True)
         return wandbc
 
-    def define_parameters(self, trial):
+    def define_parameters(self, trial, trial_parameters):
+        parameters = {}
+        for key, val in trial_parameters.items():
+            parameters[key] = trial.suggest_categorical(key, val)
+        return parameters
+
+    def define_parameters_old(self, trial):
         parameters = {}
         parameters["optimizer"] = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"])
         parameters["lr"] = trial.suggest_float("lr", 1e-4, 1e-1, log=True)
@@ -110,19 +124,64 @@ class Hyper_Optimizer:
         for key, value in trial.params.items():
             print("    {}: {}".format(key, value))
 
+    def create_dataloader(self, traindf, trainloc, valdf, valloc, parameters, dual_pred):
+        # Create Train data
+        train_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=traindf, data_loc=trainloc, data_type="train",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred,
+                            weighted=self.config.train_parameters["imbalance_weight"],
+                            normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+        # Create Val data
+        val_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=valdf, data_loc=valloc, data_type="prediction",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+        train_loader = NN_Data.load_data(train_dataset, parameters["batch_size"],
+                                        num_workers=self.config.train_parameters["num_workers"],
+                                        shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
+                                        bucketing=self.config.train_parameters["bucketing"],
+                                        stratified=self.config.train_parameters["stratified"])
+        val_loader = NN_Data.load_data(val_dataset, parameters["batch_size"],
+                                        num_workers=self.config.train_parameters["num_workers"],
+                                        shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
+                                        bucketing=self.config.train_parameters["bucketing"], stratified=False)
+        return train_loader, val_loader
+
     def create_NNSet(self, parameters):
         train_NNs = []
-        for n in range(len()):
-            
-            train_NN1 = self.create_actor(trainloader1, valloader1, parameters)
+        for n in range(self.num_NN):
+            traindf = self.config.hyperopt_parameters["train_df"][n]
+            trainloc = self.config.hyperopt_parameters["train_loc"][n]
+            valdf = self.config.hyperopt_parameters["val_df"][n]
+            valloc = self.config.hyperopt_parameters["val_loc"][n]
+#            trainloader, valloader = self.create_dataloader(traindf=traindf,
+ #                                       trainloc=trainloc, valdf=valdf, valloc=valloc, parameters=parameters)
+            train_NN1 = self.create_actor(traindf=traindf, valdf=valdf, trainloc=trainloc,
+                                valloc=valloc, parameters=parameters)
 
             train_NNs.append(train_NN1)
         return train_NNs
 
-    def create_actor(self, trainloader, valloader, parameters):
-        train_NN = Trainable_NN.remote(trainloader, valloader, self.device)
+    def create_actor(self, traindf, valdf, trainloc, valloc, parameters):
+        train_NN = Trainable_NN.remote(network=self.network_base, config=self.config,
+                                        results_dir=self.results_folder, mixed_precision=self.mixed_precision,
+                                        loss_function=self.loss_function, memory_report=self.memory_report,
+                                        )
+        train_NN.create_dataloader.remote(traindf=traindf, trainloc=trainloc, valdf=valdf, valloc=valloc,
+                                            parameters=parameters, dual_pred=self.dual_pred)
         train_NN.set_NN.remote(parameters)
-        train_NN.set_optimizer.remote(parameters)
+        train_NN.set_optimizer.remote(epochs=self.config.train_parameters["epochs"],
+                                optimizer=self.config.train_parameters["optimizer"],
+                                learning_rate=parameters["learning_rate"],
+                                weight_decay=self.config.train_parameters["weight_decay"],
+                                lr_schedule=self.config.train_parameters["lr_scheduler"],
+                                end_lr=self.config.train_parameters["lr_end"],
+                                amsgrad=False, fused_OptBack=False, warmup_period=self.config.train_parameters["warm_up"])
         return train_NN
 
     def create_name(self, parameters):
@@ -134,9 +193,20 @@ class Hyper_Optimizer:
     def add_advice(self, advice):
         self.study.enqueue_trial(advice)
 
+    def record_data(self, wandb_run, results_array):
+        wandb_run.summary["final accuracy"] = results_array[1,-1]
+        wandb_run.summary["final epoch"] = results_array[0, -1]
+        wandb_run.summary["best accuracy"] = max(results_array[1,:])
+        wandb_run.summary["best epoch"] = results_array[0, np.argmax(results_array[1,:])]
+        last15 = np.sort(results_array[1,-15:])[::-1]
+        wandb_run.summary["mean (5) best 15 last epochs"] = np.mean(last15[0:5])
+        wandb_run.summary["state"] = "complated"
+        wandb_run.finish(quiet=True)
+
     def objective(self, trial):
         # Define Parameters
-        parameters = self.define_parameters(trial)
+        parameters = self.define_parameters(trial=trial,
+                                            trial_parameters=self.config.hyperopt_parameters["optimizing_parameters"])
         self.parameters = parameters.keys()
         config = dict(trial.params)
         config["trial.number"] = trial.number
@@ -144,18 +214,32 @@ class Hyper_Optimizer:
                                 group=self.group, config=config,reinit=True)
         # Get the FashionMNIST dataset.
         train_NNs = self.create_NNSet(parameters)
+        max_mcc_value = 0
+        results_mcc = []
         # Training of the model.
-        for epoch in tqdm(range(EPOCHS)):
-            acc_loss = ray.get([trains.train_epoch.remote() for trains in train_NNs])
+        for epoch in tqdm(range(self.config.train_parameters["epochs"])):
+            acc_mccs = ray.get([trains.train_epoch.remote(parameters["batch_size"], self.config.train_parameters["asynchronity"]) for trains in train_NNs])
             acc = 0
-            for n in acc_loss:
-                acc+=n
-            acc/=self.num_NN
-            wandb_run.log(data={"validation accuracy": acc}, step=epoch)
-            trial.report(acc, epoch)
+            for n in range(self.num_NN):
+                val_mcc = float(acc_mccs[n]["val_mcc"])
+                lr = float(acc_mccs[n]["learning_rate"])
+                wandb_run.log(data={"validation accuracy NN{}".format(n):val_mcc}, step=epoch)
+                wandb_run.log(data={"learning rate NN{}".format(n):lr}, step=epoch)
+                acc += val_mcc
+            acc /= self.num_NN
+            results_mcc.append([epoch, acc])
 
+            if epoch >= self.min_epochs_count:
+                if max_mcc_value < acc:
+                    max_mcc_value = acc
+                trial.report(max_mcc_value, epoch)
+            else:
+                trial.report(acc, epoch)
+
+            wandb_run.log(data={"validation accuracy": acc}, step=epoch)
+            wandb_run.log(data={"max validation accuracy": max_mcc_value}, step=epoch)
             # Handle pruning based on the intermediate value.
-            if trial.should_prune() and epoch < self.min_epochs:
+            if trial.should_prune() and epoch < self.min_epochs_prune:
                 wandb_run.summary["state"] = "pruned"
                 wandb_run.finish(quiet=True)
                 for actor in train_NNs:
@@ -163,14 +247,12 @@ class Hyper_Optimizer:
                 raise optuna.exceptions.TrialPruned()
         for actor in train_NNs:
             ray.kill(actor)
-        wandb_run.summary["final accuracy"] = acc
-        wandb_run.summary["state"] = "complated"
-        wandb_run.finish(quiet=True)
+        self.record_data(wandb_run, np.array(results_mcc))
         return acc
 
     def run_save(self, name=None):
         if name is None:
-            name = "{}/{}_{}".format(self.results_folder, self.study_name, self.group)
+            name = "{}/{}_Group{}".format(self.results_folder, self.study_name, self.group)
         joblib.dump(self.study, "{}.pkl".format(name))
         with open("{}_sampler.pkl".format(name), "wb") as fout:
             pickle.dump(self.study.sampler, fout)
@@ -194,7 +276,7 @@ class Hyper_Optimizer:
 @ray.remote(num_gpus=GPU_per_Actor, num_cpus=CPU_per_Actor)
 class Trainable_NN:
 
-    def __init__(self, network, config, results_dir, mixed_precision, loss_function, memory_report, wandb_report, swa_iter):
+    def __init__(self, network, config, results_dir, mixed_precision, loss_function, memory_report):
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6'
         torch.cuda.empty_cache()
 
@@ -210,29 +292,64 @@ class Trainable_NN:
         self.config = config
 
         self.loss = loss_function
+        self.loss_function = loss_function()
 
         self.mixed_precision = mixed_precision
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
 
-        self.swa_iter = swa_iter
-
-        self.results_training = wandb_report
-        self.results_training.start_train_report(model=self.network, criterion=self.loss)
-
         self.saved_model = {"epoch": None, 'model_state_dict': None, 'optimizer_state_dict': None,
                                 'loss': None, "val_measure": None}
 
+    def create_dataloader(self, traindf, trainloc, valdf, valloc, parameters, dual_pred):
+        # Create Train data
+        train_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=traindf, data_loc=trainloc, data_type="train",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred,
+                            weighted=self.config.train_parameters["imbalance_weight"],
+                            normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+        # Create Val data
+        val_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
+                            data_df=valdf, data_loc=valloc, data_type="prediction",
+                            cluster_sample=self.config.train_parameters["data_sample"],
+                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
+                            dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
+                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
+        self.train_dataloader = NN_Data.load_data(train_dataset, parameters["batch_size"],
+                                        num_workers=self.config.train_parameters["num_workers"],
+                                        shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
+                                        bucketing=self.config.train_parameters["bucketing"],
+                                        stratified=self.config.train_parameters["stratified"])
+        self.val_dataloader = NN_Data.load_data(val_dataset, parameters["batch_size"],
+                                        num_workers=self.config.train_parameters["num_workers"],
+                                        shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
+                                        bucketing=self.config.train_parameters["bucketing"], stratified=False)
+        
 
-    def set_dataloader(self, train_dataset, val_dataset, batch_size, num_workers, stratified, bucketing, asynchonity):
-        #  creating dataloaders
-        self.train_dataloader = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
-        self.val_dataloader = NN_Data.load_data(val_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=False)
+
+    def set_data(self, trainloader, valloader):
+        self.train_dataloader = trainloader
+        self.val_dataloader = valloader
+
+    def set_blocks(self, parameters):
+        blocks = []
+        count = 1
+        while True:
+            try:
+                value_block = parameters["block_dim{}".format(count)]
+            except KeyError:
+                break
+            if value_block != 0:
+                blocks.append(value_block)
+            count += 1
+        return blocks
+
 
     def set_NN(self, parameters):
 
-        blocks = [i for i in parameters["block_dims"] if i != 0]
+        blocks = self.set_blocks(parameters)
 
         self.network = self.network_base(input_dim=self.config.model_parameters["input_dim"],
                                     num_classes=self.config.model_parameters["out_dim"],
@@ -249,8 +366,9 @@ class Trainable_NN:
                                     length_dim=self.config.model_parameters["length_dim"])
         self.network.to(self.device)
 
-    def set_optimizer(self, epochs, steps, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
+    def set_optimizer(self, epochs, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
                         lr_schedule=False, end_lr=3/2, amsgrad=False, fused_OptBack=False, warmup_period=False):
+        steps = len(self.train_dataloader)
         if fused_OptBack:
             self.optimizer = {p: optimizer([p], foreach=False, lr=learning_rate, weight_decay=weight_decay, amsgrad=amsgrad
                                             ) for p in self.network.parameters()}
@@ -287,6 +405,41 @@ class Trainable_NN:
             raise ValueError("The scheduler type {} is not available".format(scheduler_type))
         return scheduler
 
+    def train_epoch(self, batch_size, asynchronity):
+        loss_tr, mcc_tr, lr_rate_lst, _ = self.train_pass(batch_size=batch_size, asynchronity=asynchronity)
+        loss_val, mcc_val, _ = self.val_pass(batch_size=batch_size, asynchronity=asynchronity)
+        if self.lr_scheduler is not None:
+            if self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
+                self.update_scheduler(value=loss_val)
+            elif self.lr_scheduler.__class__.__name__ == "MultiStepLR":
+                self.update_scheduler()
+        return {"val_mcc": mcc_val, "learning_rate": np.mean(lr_rate_lst)}
+
+    def calculate_loss(self, predictions_logit, labels):
+        predictions = torch.sigmoid(predictions_logit)
+        if self.loss == torch.nn.modules.loss.BCELoss:
+            loss = self.loss_function(predictions, labels)
+        elif self.loss == torch.nn.modules.loss.BCEWithLogitsLoss:
+            loss = self.loss_function(predictions_logit, labels)
+        else:
+            raise KeyError("The loss function {} is not available".format(self.loss))
+        return predictions, loss
+
+    def scheduler_step(self, value=False):
+        if value is not False:
+            self.lr_scheduler.step(value)
+        else:
+            self.lr_scheduler.step()
+
+    def update_scheduler(self, value=False):
+        if self.warmup is not None:
+            with self.warmup["scheduler"].dampening():
+                if self.warmup["scheduler"].last_step + 1 >= self.warmup["period"]:
+                    self.scheduler_step(value=value)
+        else:
+            self.scheduler_step(value=value)
+
+
     def train_pass(self, batch_size, profiler=None, asynchronity=False, clipping=False):
 
         self.network.train()
@@ -300,7 +453,7 @@ class Trainable_NN:
         pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
         batch_n = 0
 
-        for batch in tqdm(self.train_loader):
+        for batch in tqdm(self.train_dataloader):
             pos_first, pos_last = count, count+batch_size
             if self.profiler is not None:
                 self.profiler.step()
@@ -342,8 +495,6 @@ class Trainable_NN:
             pred_tensor[pos_first:pos_last,:] = pred_c
 
             loss_pass += loss_c
-            self.results_training.add_step_info(loss_train=loss_c, lr=self.optimizer.param_groups[-1]['lr'], batch_n=batch_n,
-                                             len_dataloader=len_dataloader)
             #  clean gpu (maybe unnecessary)
             count += batch_size
             batch_n += 1
@@ -399,6 +550,7 @@ class Trainable_NN:
                 #  clean gpu (maybe unnecessary
                 batch_n += 1
                 count += batch_size
+        print(len(self.val_dataloader))
         loss_pass = loss_pass/batch_n
         if pred_tensor.size()[1] == 2:
             pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]

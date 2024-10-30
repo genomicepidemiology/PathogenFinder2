@@ -18,7 +18,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         block_dims: list,
         attention_dim: int,
         dropout_att: float,
-        fnn_dim: int = None,
+        fnn_dim: int = 0,
         stem_cell: bool = True,
         sequence_dropout: float = 0.3,
         length_information = False,

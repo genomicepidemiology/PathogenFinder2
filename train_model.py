@@ -341,7 +341,7 @@ class Train_NeuralNet():
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=False)
 
 
-        steps = steps=len(train_loader)
+        steps = len(train_loader)
         self.set_optimizer(epochs=epochs, steps=steps, optimizer=optimizer, learning_rate=learning_rate, 
                 weight_decay=weight_decay, lr_schedule=lr_schedule, end_lr=end_lr, amsgrad=amsgrad, fused_OptBack=fused_OptBack,
                 warmup_period=warmup_period)
