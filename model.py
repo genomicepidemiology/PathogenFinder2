@@ -339,7 +339,7 @@ class Compile_Model:
         else:
             return False
 
-    def predict_model(self):
+    def predict_model(self, load_model):
         self.set_model()
 
         if self.model is None:
@@ -356,8 +356,10 @@ class Compile_Model:
         prediction_instance = Prediction_NeuralNet()
         prediction_instance(pred_dataset=pred_dataset)
 
-    def test_model(self):
+    def test_model(self, load_model, type_load):
         self.set_model()
+
+        self.load_model(load_model, type_load=type_load)
 
         if self.model is None:
             raise ValueError("Set the Model First")
@@ -450,12 +452,13 @@ if __name__ == "__main__":
     if model_arguments.hyperparam_opt:
         compiled_model.hyperparam_sel()
     if model_arguments.predict:
-        compiled_model.load_model(compiled_model.results_dir)
-        compiled_model.predict_model()
+#        compiled_model.load_model(compiled_model.results_dir)
+        compiled_model.predict_model(compiled_model.results_dir)
     if model_arguments.test:
-        compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
+#        compiled_model.load_model(compiled_model.results_dir, type_load="checkpoint")
  #       compiled_model.load_model("/work3/alff/results_pathogenfinder2/ConvNextAtt_dual_3blocks_addlen_09-10-2024_15-25-01", type_load="checkpoint")
  #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/TRAIN_nolen_OneCycleLR13_lr1-3_22-10-2024_16-48-07", type_load="checkpoint")
  #       compiled_model.load_model("/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/convnext_test_18-09-2024_17-07-53", type_load="checkpoint")
-        compiled_model.test_model()
+ #       results_dir = "/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/TRAIN_init_heading_nonresidual_b64_softmaxact_29-10-2024_15-14-47"
+        compiled_model.test_model(load_model=compiled_model.results_dir, type_load="checkpoint")
 

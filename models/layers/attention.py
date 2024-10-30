@@ -54,6 +54,10 @@ class Attention_Methods(nn.Module):
         if self.k_w[-1].bias is not None:
             self.k_w.bias[-1].data.fill_(0.01)
 
+ #       torch.nn.init.xavier_normal_(self.score_proj.weight)
+  #      if self.score_proj.bias is not None:
+   #         self.score_proj.data.fill_(0.01)
+
     def attention_forward(self, x_in, mask):
         x_in = x_in.permute(0, 2, 1)
         query = self.q_w(x_in)

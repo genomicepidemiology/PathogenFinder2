@@ -18,7 +18,7 @@ class ConvNet_AddAtt_Net(nn.Module):
         block_dims: list,
         attention_dim: int,
         dropout_att: float,
-        fnn_dim = None,
+        fnn_dim: int = None,
         stem_cell: bool = True,
         sequence_dropout: float = 0.3,
         length_information = False,
@@ -90,7 +90,9 @@ class ConvNet_AddAtt_Net(nn.Module):
             else:
                 self.stochastic_depth_att = False
         if fnn_dim != 0:
-            self.fnn_out = nn.Sequential(norm_layer(block_dims[-1]), nn.Linear(block_dims[-1],fnn_dim))
+            self.fnn_out = nn.Sequential(norm_layer(block_dims[-1]), nn.Linear(block_dims[-1],fnn_dim), nn.ReLU())
+            nn.init.kaiming_normal_(self.fnn_out[-2].weight)
+            self.fnn_out[-2].data.fill(0.01)
             inclass_dim = fnn_dim
         else:
             self.fnn_out = None
@@ -98,8 +100,11 @@ class ConvNet_AddAtt_Net(nn.Module):
 
         self.classifier = Classifier(inclass_dim, num_classes, length_information, length_dim)
 
-        self.classifier.linear_out.weight.data.mul_(head_init_scale)
-        self.classifier.linear_out.bias.data.mul_(head_init_scale)
+        nn.init.xavier_normal_(self.classifier.linear_out.weight)
+        self.classifier.linear_out.bias.data.fill_(0.01)
+
+ #       self.classifier.linear_out.weight.data.mul_(head_init_scale)
+  #      self.classifier.linear_out.bias.data.mul_(head_init_scale)
 
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv1d, nn.Linear)):
