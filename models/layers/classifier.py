@@ -40,9 +40,11 @@ class Classifier(nn.Module):
             t = t.unsqueeze(-1)
             x = torch.concat((x, t), axis=1)
         elif self.length_information == "add":
-            x = x + self.length_step(t)
+            length_step = torch.squeeze(self.length_step(t), -1)
+            x = x + length_step
         elif self.length_information == "concat1":
-            x = torch.concat((x, self.length_step(t)), axis=1)
+            length_step = torch.squeeze(self.length_step(t), -1)
+            x = torch.concat((x, length_step), axis=1)
         else:
             x = x
         x = self.norm_layer(x)

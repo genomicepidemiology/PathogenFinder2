@@ -21,7 +21,7 @@ from utils import NNUtils, EarlyStopping, Metrics
 
 class Train_NeuralNet():
     MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
-    MAX_BATCH_SIZE = 64
+    MAX_BATCH_SIZE = 45
     MIN_BATCH_SIZE = 8
 
     def __init__(self, network, configuration=None, loss_function=None, results_dir=None, memory_report=False, 
@@ -194,7 +194,6 @@ class Train_NeuralNet():
                 if isinstance(self.optimizer, dict):
                     pass
                 else:
-                    print("UPDATED WEIGHTS", idx)
                     self.scaler.step(self.optimizer)
                 self.optimizer.zero_grad(set_to_none=True)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
@@ -315,7 +314,6 @@ class Train_NeuralNet():
         return min_batch, accumulated_gradient
 
                    
-       
 
     def __call__(self, train_dataset, val_dataset, epochs, batch_size, optimizer=torch.optim.Adam, learning_rate=1e-5, weight_decay=1e-4,
             lr_schedule=False, end_lr=3/2, amsgrad=False, num_workers=2, asynchronity=False, stratified=False,
@@ -329,7 +327,7 @@ class Train_NeuralNet():
         if batch_size > Train_NeuralNet.MAX_BATCH_SIZE:
             batch_size, accumulate_gradient = self.set_sensible_batch_size(batch_size)
         else:
-            accumulate_gradient = False
+            accumulate_gradient = 1
 
         #  creating dataloaders
         train_loader = NN_Data.load_data(train_dataset, batch_size, num_workers=num_workers,
@@ -354,7 +352,6 @@ class Train_NeuralNet():
             print(f'Epoch {epoch+1}/{epochs}') 
             start_e_time = time.time()
             #  training
-#            with torch.autograd.set_detect_anomaly(True):
             loss_train, mcc_t, lr_rate, profiler = self.train_pass(train_loader=train_loader, batch_size=batch_size,
 									clipping=clipping, asynchronity=asynchronity)
             #  validation
@@ -371,7 +368,6 @@ class Train_NeuralNet():
 
             if keep_model == "best_epoch":
                 self.saved_model = self.best_epoch_retain(new_val=mcc_v, optimizer=self.optimizer, model=self.network, epoch=epoch, loss=loss_train)
-            print(self.lr_scheduler.__class__.__name__, self.optimizer.param_groups[-1]['lr'])
             if self.lr_scheduler is not None:
                 if self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
                     self.update_scheduler(value=loss_val)

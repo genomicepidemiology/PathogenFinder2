@@ -124,33 +124,6 @@ class Hyper_Optimizer:
         for key, value in trial.params.items():
             print("    {}: {}".format(key, value))
 
-    def create_dataloader(self, traindf, trainloc, valdf, valloc, parameters, dual_pred):
-        # Create Train data
-        train_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
-                            data_df=traindf, data_loc=trainloc, data_type="train",
-                            cluster_sample=self.config.train_parameters["data_sample"],
-                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
-                            dual_pred=dual_pred,
-                            weighted=self.config.train_parameters["imbalance_weight"],
-                            normalize=self.config.train_parameters["normalize"],
-                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
-        # Create Val data
-        val_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
-                            data_df=valdf, data_loc=valloc, data_type="prediction",
-                            cluster_sample=self.config.train_parameters["data_sample"],
-                            cluster_tsv=self.config.train_parameters["cluster_tsv"],
-                            dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
-                            fraction_embeddings=self.config.train_parameters["prot_dim_split"])
-        train_loader = NN_Data.load_data(train_dataset, parameters["batch_size"],
-                                        num_workers=self.config.train_parameters["num_workers"],
-                                        shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
-                                        bucketing=self.config.train_parameters["bucketing"],
-                                        stratified=self.config.train_parameters["stratified"])
-        val_loader = NN_Data.load_data(val_dataset, parameters["batch_size"],
-                                        num_workers=self.config.train_parameters["num_workers"],
-                                        shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
-                                        bucketing=self.config.train_parameters["bucketing"], stratified=False)
-        return train_loader, val_loader
 
     def create_NNSet(self, parameters):
         train_NNs = []
@@ -159,11 +132,8 @@ class Hyper_Optimizer:
             trainloc = self.config.hyperopt_parameters["train_loc"][n]
             valdf = self.config.hyperopt_parameters["val_df"][n]
             valloc = self.config.hyperopt_parameters["val_loc"][n]
-#            trainloader, valloader = self.create_dataloader(traindf=traindf,
- #                                       trainloc=trainloc, valdf=valdf, valloc=valloc, parameters=parameters)
             train_NN1 = self.create_actor(traindf=traindf, valdf=valdf, trainloc=trainloc,
-                                valloc=valloc, parameters=parameters)
-
+                                            valloc=valloc, parameters=parameters)
             train_NNs.append(train_NN1)
         return train_NNs
 
@@ -218,17 +188,20 @@ class Hyper_Optimizer:
         results_mcc = []
         # Training of the model.
         for epoch in tqdm(range(self.config.train_parameters["epochs"])):
-            acc_mccs = ray.get([trains.train_epoch.remote(parameters["batch_size"], self.config.train_parameters["asynchronity"]) for trains in train_NNs])
+            print("epoch starts")
+            acc_mccs = ray.get([trains.train_epoch.remote(self.config.train_parameters["asynchronity"]) for trains in train_NNs])
+            print("epoch finishes")
             acc = 0
             for n in range(self.num_NN):
                 val_mcc = float(acc_mccs[n]["val_mcc"])
                 lr = float(acc_mccs[n]["learning_rate"])
-                wandb_run.log(data={"validation accuracy NN{}".format(n):val_mcc}, step=epoch)
-                wandb_run.log(data={"learning rate NN{}".format(n):lr}, step=epoch)
+                wandb_run.log(data={"validation accuracy NN{}".format(n):val_mcc,
+                                    "learning rate NN{}".format(n):lr,
+                                    "epoch": epoch}, step=epoch)
+#                wandb_run.log(data={"learning rate NN{}".format(n):lr}, step=epoch)
                 acc += val_mcc
             acc /= self.num_NN
             results_mcc.append([epoch, acc])
-
             if epoch >= self.min_epochs_count:
                 if max_mcc_value < acc:
                     max_mcc_value = acc
@@ -236,8 +209,7 @@ class Hyper_Optimizer:
             else:
                 trial.report(acc, epoch)
 
-            wandb_run.log(data={"validation accuracy": acc}, step=epoch)
-            wandb_run.log(data={"max validation accuracy": max_mcc_value}, step=epoch)
+            wandb_run.log(data={"validation accuracy": acc, "max validation accuracy": max_mcc_value, "epoch":epoch}, step=epoch)
             # Handle pruning based on the intermediate value.
             if trial.should_prune() and epoch < self.min_epochs_prune:
                 wandb_run.summary["state"] = "pruned"
@@ -275,6 +247,8 @@ class Hyper_Optimizer:
 
 @ray.remote(num_gpus=GPU_per_Actor, num_cpus=CPU_per_Actor)
 class Trainable_NN:
+    MAX_BATCH_SIZE = 45
+    MIN_BATCH_SIZE = 8
 
     def __init__(self, network, config, results_dir, mixed_precision, loss_function, memory_report):
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True, garbage_collection_threshold:0.6'
@@ -300,7 +274,44 @@ class Trainable_NN:
         self.saved_model = {"epoch": None, 'model_state_dict': None, 'optimizer_state_dict': None,
                                 'loss': None, "val_measure": None}
 
+    def set_sensible_batch_size(self, batch_size):
+        if batch_size < Trainable_NN.MIN_BATCH_SIZE:
+            raise ValueError("The batch size {} is smaller than the minimum allowed ({})".format(
+                                                                batch_size, Trainable_NN.MIN_BATCH_SIZE))
+
+        min_batch = 0 + Trainable_NN.MIN_BATCH_SIZE
+        accumulated_gradient = batch_size / min_batch
+        pre_min_batch = min_batch
+        pre_accumul = accumulated_gradient
+        while True:
+            if pre_min_batch > Trainable_NN.MIN_BATCH_SIZE:
+                break
+            elif not pre_accumul.is_integer():
+                pass
+            elif pre_min_batch == Trainable_NN.MIN_BATCH_SIZE:
+                accumulated_gradient = pre_accumul
+                min_batch = pre_min_batch
+                break
+            else:
+                accumulated_gradient = pre_accumul
+                min_batch = pre_min_batch
+            pre_min_batch += Trainable_NN.MIN_BATCH_SIZE
+            pre_accumul = batch_size / pre_min_batch
+        if accumulated_gradient is None or not accumulated_gradient.is_integer():
+            raise ValueError("Batch size {} is not a multiple of 8".format(batch_size))
+        return min_batch, accumulated_gradient
+
+
     def create_dataloader(self, traindf, trainloc, valdf, valloc, parameters, dual_pred):
+        batch_size = self.config.model_parameters["batch_size"]
+        if batch_size > Trainable_NN.MAX_BATCH_SIZE:
+            batch_size, accumulate_gradient = self.set_sensible_batch_size(batch_size)
+        else:
+            accumulate_gradient = False
+
+        self.batch_size = batch_size
+        self.accumulate_gradient = accumulate_gradient
+
         # Create Train data
         train_dataset = NN_Data.create_dataset(input_type=self.config.model_parameters["input_type"],
                             data_df=traindf, data_loc=trainloc, data_type="train",
@@ -317,15 +328,16 @@ class Trainable_NN:
                             cluster_tsv=self.config.train_parameters["cluster_tsv"],
                             dual_pred=dual_pred, normalize=self.config.train_parameters["normalize"],
                             fraction_embeddings=self.config.train_parameters["prot_dim_split"])
-        self.train_dataloader = NN_Data.load_data(train_dataset, parameters["batch_size"],
+        self.train_dataloader = NN_Data.load_data(train_dataset, batch_size,
                                         num_workers=self.config.train_parameters["num_workers"],
                                         shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
                                         bucketing=self.config.train_parameters["bucketing"],
                                         stratified=self.config.train_parameters["stratified"])
-        self.val_dataloader = NN_Data.load_data(val_dataset, parameters["batch_size"],
+        self.val_dataloader = NN_Data.load_data(val_dataset, batch_size,
                                         num_workers=self.config.train_parameters["num_workers"],
                                         shuffle=True, pin_memory=self.config.train_parameters["asynchronity"],
                                         bucketing=self.config.train_parameters["bucketing"], stratified=False)
+        self.accumulate_gradient = accumulate_gradient
         
 
 
@@ -333,7 +345,7 @@ class Trainable_NN:
         self.train_dataloader = trainloader
         self.val_dataloader = valloader
 
-    def set_blocks(self, parameters):
+    def set_blocks_old(self, parameters):
         blocks = []
         count = 1
         while True:
@@ -346,10 +358,15 @@ class Trainable_NN:
             count += 1
         return blocks
 
+    def set_blocks(self, parameters):
+        list_blocks = [parameters["block_dims"]] * (parameters["num_blocks"]-1)
+        list_blocks.append(int(parameters["block_dims"]/2))
+        return list_blocks
 
     def set_NN(self, parameters):
 
         blocks = self.set_blocks(parameters)
+        print(blocks)
 
         self.network = self.network_base(input_dim=self.config.model_parameters["input_dim"],
                                     num_classes=self.config.model_parameters["out_dim"],
@@ -357,7 +374,7 @@ class Trainable_NN:
                                     stochastic_depth_prob=parameters["stochastic_depth_prob"],
                                     attention_dim=parameters["att_dim"],
                                     attention_norm=self.config.model_parameters["model_structure"]["att_norm"],
-                                    dropout_att=self.config.model_parameters["model_structure"]["att_dropout"],
+                                    dropout_att=parameters["att_dropout"],
                                     layer_scale=self.config.train_parameters["norm_scale"],
                                     residual_attention=self.config.model_parameters["model_structure"]["residual_attention"],
                                     sequence_dropout=parameters["sequence_dropout"],
@@ -405,7 +422,8 @@ class Trainable_NN:
             raise ValueError("The scheduler type {} is not available".format(scheduler_type))
         return scheduler
 
-    def train_epoch(self, batch_size, asynchronity):
+    def train_epoch(self, asynchronity):
+        batch_size = self.batch_size
         loss_tr, mcc_tr, lr_rate_lst, _ = self.train_pass(batch_size=batch_size, asynchronity=asynchronity)
         loss_val, mcc_val, _ = self.val_pass(batch_size=batch_size, asynchronity=asynchronity)
         if self.lr_scheduler is not None:
@@ -439,21 +457,23 @@ class Trainable_NN:
         else:
             self.scheduler_step(value=value)
 
-
-    def train_pass(self, batch_size, profiler=None, asynchronity=False, clipping=False):
+    def train_pass(self, batch_size, accumulate_gradient=False, profiler=None, asynchronity=False, clipping=False):
 
         self.network.train()
+        train_loader = self.train_dataloader
 
         loss_lst = []
         lr_rate_lst = []
         loss_pass = 0.
         count = 0
-        len_dataloader = len(self.train_dataloader)
+        len_dataloader = len(train_loader)
         labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
         pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
         batch_n = 0
 
-        for batch in tqdm(self.train_dataloader):
+        self.optimizer.zero_grad(set_to_none=True)
+
+        for idx, batch in tqdm(enumerate(train_loader)):
             pos_first, pos_last = count, count+batch_size
             if self.profiler is not None:
                 self.profiler.step()
@@ -465,12 +485,15 @@ class Trainable_NN:
             labels = labels.to(self.device, non_blocking=asynchronity)
             lengths = lengths.to(self.device, non_blocking=asynchronity)
             #  resetting gradients
-            self.optimizer.zero_grad(set_to_none=True)
+        #    self.optimizer.zero_grad(set_to_none=True)
             #  making predictions
             with torch.autocast(device_type=self.device, enabled=self.mixed_precision):
                 predictions_logit, attentions = self.network(embeddings, lengths)
                 predictions, loss = self.calculate_loss(
                                         predictions_logit=predictions_logit, labels=labels)
+
+            if self.accumulate_gradient:
+                loss = loss/self.accumulate_gradient
             #  computing gradients
             self.scaler.scale(loss).backward()
             if clipping:
@@ -478,13 +501,16 @@ class Trainable_NN:
                 self.scaler.unscale_(self.optimizer)
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), clipping)
-            #  updating weights
-            if isinstance(self.optimizer, dict):
-                pass
-            else:
-                self.scaler.step(self.optimizer)
+            if not self.accumulate_gradient or ((idx + 1) % self.accumulate_gradient == 0) or (idx + 1 == len(train_loader)):
+                #  updating weights
+                if isinstance(self.optimizer, dict):
+                    pass
+                else:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                self.optimizer.zero_grad(set_to_none=True)
             lr_rate_lst.append(self.optimizer.param_groups[-1]['lr'])
-            self.scaler.update()
+        #   self.scaler.update()
             if self.lr_scheduler is not None and self.lr_scheduler.__class__.__name__ == "OneCycleLR":
                 self.update_scheduler()
             #  computing loss
@@ -511,18 +537,19 @@ class Trainable_NN:
     def val_pass(self, batch_size, profiler=None, asynchronity=False):
 
         self.network.eval()
+        val_loader = self.val_dataloader
 
         loss_lst = []
 
         loss_pass = 0.
         count = 0
-        len_dataloader = len(self.val_dataloader)
+        len_dataloader = len(val_loader)
         labels_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device, dtype=int)
         pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device=self.device)
         batch_n = 0
 
         with torch.inference_mode():
-            for batch in tqdm(self.val_dataloader):
+            for batch in tqdm(val_loader):
                 pos_first, pos_last = count, count+batch_size
                 if self.profiler is not None:
                     self.profiler.step()
@@ -550,8 +577,8 @@ class Trainable_NN:
                 #  clean gpu (maybe unnecessary
                 batch_n += 1
                 count += batch_size
-        print(len(self.val_dataloader))
         loss_pass = loss_pass/batch_n
+
         if pred_tensor.size()[1] == 2:
             pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]
             pred_tensor = (pred_tensor+1)/2
@@ -559,7 +586,6 @@ class Trainable_NN:
             labels_tensor = (labels_tensor+1)/2
 
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
-
         return loss_pass, mcc_pass, profiler
 
 
