@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PathogenFinder2"
+version = "0.4.0"
+dependencies = []
+requires-python = ">= 3.9"
+authors = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"},]
+maintainers = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"}]
+description = "Find me some Pathogens!"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Biologists", #Fix this
+  "Topic :: Software Development :: Build Tools",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3 :: Only",
+]
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["deep learning", "epidemiology", "microbiology"]
+[project.optional-dependencies]
+
+[project.urls]
+Homepage = "https://example.com"
+Documentation = "https://readthedocs.org"
+Repository = "https://github.com/genomicepidemiology/PathogenFinder.git"
+Issues = "https://github.com/genomicepidemiology/PathogenFinder/issues"
+Changelog = "https://github.com/genomicepidemiology/PathogenFinder/blob/master/CHANGELOG.md"
+
+[project.scripts]
+#Fill
+
+[tool.setuptools]
+#Fille

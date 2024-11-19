@@ -1,0 +1,92 @@
+{
+"Misc Parameters": {
+	"Notes": "This is a base config file"
+	},
+"Model Parameters":{
+	"model_name": "ConvNext-AddAtt",
+	"input_dim": 1024,
+	"network_structure":{
+		"num_blocks":null,
+		"block_dim": null,
+		"att_dim": null,
+		"length_information":false,
+		"length_dim": null},
+	"out_dim": 1,
+	"norm_scale": null,
+	"norm_type": "Layer",
+	"data_parameters":{
+		"asynchronity": true,
+		"num_workers": 8,
+		"bucketing": false,
+		"stratified": true
+		}
+	},
+"Train Parameters":{
+	"Optimizer Parameters":{
+		"optimizer": "NAdam",
+		"lr_scheduler": "ReduceLROnPlateau",
+		"warm_up": null,
+		"weight_decay": 1e-4,
+		"lr_end": null,
+		"learning_rate": null},
+	"mixed_precision": true,
+	"stochastic_depth_prob": null,
+	"sequence_dropout": null,
+	"attention_dropout": null,
+	"epochs": null,
+	"loss_function": "bcelogits",
+	"memory_report": false,
+	"save_model": false,
+	"report_results": false,
+        "train_df": "/work3/alff/embeddings/metadata/debug_metadataTRAIN90.tsv",
+        "train_loc": "/work3/alff/embeddings/data/",
+        "val_df": "/work3/alff/embeddings/metadata/debug_metadataTEST90.tsv",
+        "val_loc": "/work3/alff/embeddings/data/"
+},
+"Inference Parameters": {
+	"Data Parameters":{
+        	"data_type": null,
+	        "data_path": "",
+	        "multiple_files": false,
+	        "output_folder": ""
+	        },
+	"Preprocessing Parameters":{
+	        "extract_proteins": false,
+	        "extract_embeddings": false
+		}
+},
+"Test Parameters": {},
+"Hyperparam_Opt Parameters": {
+        "optimizing_parameters":{
+                "batch_size": [4,8,2,6,12,20],
+                "learning_rate":[1e-4, 5e-4, 1e-3, 5e-3],
+                "stochastic_depth_prob":[0.1,0.2,0.3],
+                "sequence_dropout":[0.1,0.2,0.3,0.4],
+                "block_dim1":[10,20],
+                "block_dim2":[5, 3],
+                "block_dim3":[0,5],
+                "block_dim4":[0],
+                "block_dim5":[0],
+                "block_dim6":[0],
+                "block_dim7":[0],
+                "block_dim8":[0],
+                "att_dim":[10,30,5]
+                },
+        "name_study": "Test_HyperParam_PF2_finaltest",
+        "group": "2",
+        "num_trials": 20,
+        "load_study": true,
+        "storage": "/zhome/94/2/142348/PathogenFinder/hyperparam_storage/finaltestPF2.log",
+        "min_epochs_prune": 10,
+        "min_epochs_count": 5,
+        "train_df": ["/work3/alff/embeddings/metadata/repr_metadataTRAIN90.tsv",
+                        "/work3/alff/embeddings/metadata/repr_metadataTRAIN90.tsv"],
+        "train_loc": ["/work3/alff/embeddings/data/","/work3/alff/embeddings/data/"],
+        "val_df": ["/work3/alff/embeddings/metadata/repr_metadataTEST90.tsv",
+                        "/work3/alff/embeddings/metadata/repr_metadataTEST90.tsv"],
+        "val_loc": ["/work3/alff/embeddings/data/", "/work3/alff/embeddings/data/"],
+        "timeout": 1200,
+        "try_params": false,
+	"add_runs": false
+    }
+}
