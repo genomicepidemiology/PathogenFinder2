@@ -53,12 +53,20 @@ class Train_NeuralNetwork:
         self.batch_size = batch_size
         self.asynchronity = asynchronity
 
-    def set_optimizer(self, optimizer_class, learning_rate, weight_decay, amsgrad, scheduler_type, warmup_period,
-                        patience=None, milestones=None, gamma=None, end_lr=None,
+    def set_optimizer(self, optimizer_class=None, optimizer=None, learning_rate=None, weight_decay=None, amsgrad=False, scheduler_type=False,
+                        warmup_period=False, patience=None, milestones=None, gamma=None, end_lr=None,
                         steps=None, epochs=None):
 
-        optimizer_instance = Optimizer(network=self.network_module.network, optimizer=optimizer_class, learning_rate=learning_rate,
+        if optimizer is not None and optimizer_class is None:
+            optimizer_instance = optimizer
+        elif optimizer is None and optimizer_class is not None:
+            optimizer_instance = Optimizer(network=self.network_module.network, optimizer=optimizer_class, learning_rate=learning_rate,
                                         weight_decay=weight_decay, amsgrad=amsgrad)
+        elif optimizer is not None and optimizer_class is not None:
+            raise ValueError("An optimizer and an optimizer class are trying to be set.")
+        else:
+            raise ValueError("Or an optimizer or an optimizer class have to be set.")
+
         if scheduler_type:
             optimizer_instance.set_scheduler(scheduler_type=scheduler_type, patience=patience, milestones=milestones,
                                         gamma=gamma,  end_lr=end_lr, steps=self.train_steps, epochs=epochs)

@@ -116,7 +116,7 @@ class Pathogen_DLModel:
             model_params = None
         
         if model_params is None:
-            train_instance.set_optimizer(optimizer=train_parameters["Optimizer Parameters"]["optimizer"],
+            train_instance.set_optimizer(optimizer_class=train_parameters["Optimizer Parameters"]["optimizer"],
                                         learning_rate=train_parameters["Optimizer Parameters"]["learning_rate"],
                                         weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
                                         amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
@@ -128,7 +128,7 @@ class Pathogen_DLModel:
                                         learning_rate=optimizer["Optimizer"].param_groups[-1]['lr'],
                                         weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
                                         amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
-                                        warmup_period=train_parameters["Optimizer Parameters"]["warm_up"],
+                                        warmup_period=False,
                                         patience=None, milestones=None, gamma=None, end_lr=None,
                                         epochs=train_parameters["Epochs"])
 

@@ -22,7 +22,6 @@ class Memory_Report:
         self.prof.start()
         
     def step(self):
-        print("STEEEP")
         self.prof.step()
 
     def stop_memory_reports(self):

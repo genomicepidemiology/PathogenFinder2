@@ -43,10 +43,8 @@ class Classifier(nn.Module):
         elif self.length_information == "add":
             x = x + self.length_step(t)
         elif self.length_information == "concat1":
-            print(x.shape, self.length_step(t).shape)
             x = torch.concat((x, self.length_step(t)), axis=1)
         else:
-            print(x.shape)
             x = x
         x = self.norm_layer(x)
         x = self.linear_out(x)
