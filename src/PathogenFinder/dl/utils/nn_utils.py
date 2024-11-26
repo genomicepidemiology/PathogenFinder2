@@ -30,6 +30,8 @@ class Network_Module:
         else:
             self.loss_function = torch.nn.modules.loss.BCELoss
 
+        
+
     def calculate_loss(self, predictions_logit, labels):
         predictions = torch.sigmoid(predictions_logit)
         if self.loss_type == "bce":
@@ -39,6 +41,26 @@ class Network_Module:
         else:
             raise KeyError("The loss function {} is not available".format(self.loss))
         return predictions, loss
+
+    def load_weights(self, weights):
+        self.network.load_state_dict(weights)
+        return None
+
+    def load_checkpoint(self, checkpoint, optimizer=None):
+        self.network.load_state_dict(checkpoint['model_state_dict'])
+        if optimizer is not None:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        epoch = checkpoint['epoch']
+        loss = checkpoint['loss']
+        return {"Optimizer": optimizer, "Epoch": epoch, "Loss": loss}
+
+    def load_model(self, weights_path):
+        weights = torch.load(weights_path, weights_only=True)
+        if "optimizer_state_dict" in weights:
+            model_params = self.load_checkpoint(checkpoint=weights)
+        else:
+            model_params = self.load_weights(weights=weights)
+        return model_params
 
     def save_model(self, optimizer=None, loss=None, mcc_val=None, epoch=None):
         model_data = {"model_state_dict": self.network.state_dict()}
@@ -124,9 +146,7 @@ class Network_Module:
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
         return loss_pass, mcc_pass, lr_rate_lst, optimizer
 
-
-    def predictive_pass(self, val_loader, batch_size, asynchronity=False):
-
+    def validation_pass(self, val_loader, batch_size, asynchronity=False):
         self.network.eval()
 
         loss_lst = []
@@ -151,7 +171,6 @@ class Network_Module:
                 labels = labels.to(self.device, non_blocking=asynchronity)
                 lengths = lengths.to(self.device, non_blocking=asynchronity)
                 #  making predictions
-#                predictions_logit, attentions = self.network(embeddings, lengths)
                 with torch.autocast(device_type=self.device, enabled=self.mixed_precision):
                     predictions_logit, attentions = self.network(embeddings, lengths)
                     predictions, loss = self.calculate_loss(
@@ -179,6 +198,56 @@ class Network_Module:
         mcc_pass = Metrics.calculate_MCC(labels=labels_tensor, predictions=pred_tensor, device=self.device)
 
         return loss_pass, mcc_pass
+
+    def predictive_pass(self, val_loader, batch_size, asynchronity=False):
+
+        self.network.eval()
+
+        loss_lst = []
+
+        loss_pass = 0.
+        count = 0
+        len_dataloader = len(val_loader)
+        pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device="cpu")
+        file_tensor = []
+        protID_tensor = []
+        att_tensor = []
+        batch_n = 0
+
+        with torch.inference_mode():
+            for batch in tqdm(val_loader):
+                pos_first, pos_last = count, count+batch_size
+                if self.memory_profiler:
+                    self.memory_profiler.step()
+                file_names = batch["File_Names"]
+                protein_ids = batch["Protein_IDs"]
+                embeddings = batch["Input"]
+                lengths = batch["Protein Count"]
+                #  sending data to device
+                embeddings = embeddings.to(self.device, non_blocking=asynchronity)
+                lengths = lengths.to(self.device, non_blocking=asynchronity)
+                #  making predictions
+                with torch.autocast(device_type=self.device, enabled=self.mixed_precision):
+                    predictions_logit, attentions = self.network(embeddings, lengths)
+                    predictions = torch.sigmoid(predictions_logit)
+
+                pred_c = predictions.detach().cpu()
+                pred_tensor[pos_first:pos_last,:] = pred_c
+                file_tensor.extend(file_names)
+                protID_tensor.append(protein_ids)
+
+                attentions = attentions.detach().cpu()
+                att_tensor.append(attentions)
+
+                #  clean gpu (maybe unnecessary
+                batch_n += 1
+                count += batch_size
+
+        if pred_tensor.size()[1] == 2:
+            pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]
+            pred_tensor = (pred_tensor+1)/2
+
+        return pred_tensor.T.tolist(), file_tensor, protID_tensor, att_tensor
 
     @staticmethod
     def set_sensible_batch_size(batch_size, min_batch_size=8, max_batch_size=45):

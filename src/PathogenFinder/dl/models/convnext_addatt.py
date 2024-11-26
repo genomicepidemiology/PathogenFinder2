@@ -169,6 +169,7 @@ class ConvNext_AddAtt_Net(nn.Module):
         x, attentions = self.attention_layer(x, mask, lengths)
         if self.stochastic_depth_att and not self.residual_attention:
             x = self.stochastic_depth_att(x)
+        print("Presqueeze", x.shape)
         x = torch.squeeze(x,dim=-1)
         if self.fnn_out is not None:
             x = self.fnn_out(x)

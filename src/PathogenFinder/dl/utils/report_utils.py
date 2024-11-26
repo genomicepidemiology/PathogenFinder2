@@ -4,25 +4,38 @@ import torch
 
 class Memory_Report:
 
-    def __init__(self, results_dir):
+    def __init__(self, results_dir, process):
         self.results_dir = results_dir
+        self.process = process
+        self.prof = None
 
-    def start_memory_reports(self):
-        memory_report = "{}/memory_report".format(self.results_dir)
+    def start_memory_reports(self, max_num_events_per_snapshot=1):
+        memory_report = "{}/{}_memory-report".format(self.results_dir, self.process)
         torch.cuda.memory._record_memory_history(
-            max_entries=Train_NeuralNet.MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT)
-        prof = torch.profiler.profile(
-                        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3),
-                        on_trace_ready=torch.profiler.tensorboard_trace_handler("{}".format(memory_report)),
-                        record_shapes=True, with_stack=False, profile_memory=True)
-        prof.start()
-        return prof
+            max_entries=max_num_events_per_snapshot)
+        self.prof = torch.profiler.profile(
+                        schedule=torch.profiler.schedule(wait=0, warmup=0, active=2),
+                        activities=[torch.profiler.ProfilerActivity.CPU,
+                                    torch.profiler.ProfilerActivity.CUDA],
+                       # on_trace_ready=torch.profiler.tensorboard_trace_handler("{}".format(memory_report)),
+                        record_shapes=True, with_stack=True, profile_memory=True)
+        self.prof.start()
+        
+    def step(self):
+        print("STEEEP")
+        self.prof.step()
 
     def stop_memory_reports(self):
-        if self.profiler is not None:
-            self.profiler.stop()
-            torch.cuda.memory._dump_snapshot("{}/memory_record.pkl".format(self.results_dir))
+        if self.prof is not None:
+            self.prof.stop()
+            print(torch.cuda.memory_summary())
+ #           self.prof.export_memory_timeline("{}/{}_memory-record.html".format(self.results_dir, self.process))
+            self.prof.export_chrome_trace("{}/{}_memory-record.json".format(self.results_dir, self.process))
+            print(self.prof.key_averages().table())
+            torch.cuda.memory._dump_snapshot("{}/{}_memory-record.pkl".format(self.results_dir, self.process))
             torch.cuda.memory._record_memory_history(enabled=None)
+        else:
+            raise ValueError("Profiler has not been started")
 
 class ReportNN:
 

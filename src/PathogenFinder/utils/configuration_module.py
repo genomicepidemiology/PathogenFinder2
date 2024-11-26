@@ -23,7 +23,7 @@ class ConfigurationPF2:
                                             "Out Dimensions", "Norm Scale", "Norm Type", "Data Parameters", "Attention Norm",
                                             "Mixed Precision", "Stochastic Depth Prob", "Sequence Dropout", "Attention Dropout",
                                             "Model Weights", "Batch Size", "Seed", "Stochastic Depth Prob Att", "Memory Report",
-                                            "Loss Function"])
+                                            "Loss Function", "Network Weights"])
         self.train_parameters = None
         self.test_parameters = None
         self.inference_parameters = None
@@ -39,10 +39,11 @@ class ConfigurationPF2:
                                             "Save Model", "Report Results", "Train DF", "Train Loc",
                                             "Validation DF", "Validation Loc"])
         elif mode == "Inference":
-            self.test_parameters = self.init_params(param_group="Inference Parameters",
-                                    list_params=["Data Parameters", "Preprocessing Parameters", "Sequence Format", "Input Data"])
+            self.inference_parameters = self.init_params(param_group="Inference Parameters",
+                                    list_params=["Preprocessing Parameters", "Sequence Format", "Input Data",
+                                                    "Input Location", "Multiple Files", "Input Metadata"])
         elif mode == "Test":
-            self.inference_parameters = self.init_params(param_group="Test Parameters",
+            self.test_parameters = self.init_params(param_group="Test Parameters",
                                     list_params=["Test DF", "Test Loc"])
         elif mode == "Hyperparam_Opt":
             self.hyperopt_parameters = self.init_params(parm_group="Hyperparam_Opt Parameters",
@@ -70,7 +71,7 @@ class ConfigurationPF2:
                     model_set = self.model_parameters
                 elif params == "Train Parameters":
                     model_set = self.train_parameters
-                elif params == "Prediction Parameters":
+                elif params == "Inference Parameters":
                     model_set = self.inference_parameters
                 elif params == "Test Parameters":
                     model_set = self.test_parameters

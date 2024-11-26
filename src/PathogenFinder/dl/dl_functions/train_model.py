@@ -10,11 +10,8 @@ from dl.utils.nn_utils import Network_Module
 
 class Train_NeuralNetwork:
 
-    # TODO: Model storage, model report
 
-    def __init__(self, network_module, model_storage=False, model_report=False):
-
-        print(model_storage)
+    def __init__(self, network_module, model_storage=False, model_report=False, model_params=None):
 
         assert model_storage in ["last_epoch", "early_stopping", "best_epoch"]
 
@@ -34,6 +31,7 @@ class Train_NeuralNetwork:
         self.model_report = model_report
 
         self.optimizer = None
+
 
     def set_dataloaders(self, train_dataset, batch_size, val_dataset=None, num_workers=2,
                 stratified=False, bucketing=False, asynchronity=False, max_batch_size=45):
@@ -69,7 +67,7 @@ class Train_NeuralNetwork:
 
         self.optimizer = optimizer_instance
 
-    def __call__(self, epochs):
+    def __call__(self, epochs, model_params=None):
 
         if self.train_loader is None:
             raise ValueError("Please set dataloaders before training")
@@ -79,17 +77,24 @@ class Train_NeuralNetwork:
 
         max_mcc_val = 0
 
+        if model_params is None:
+            init_epoch = 0
+        else:
+            init_epoch = model_params["Epoch"]
+
         for epoch in range(epochs):
+            epoch += init_epoch
             print(f'Epoch {epoch+1}/{epochs}')
             start_e_time = time.time()
             #  training
+            print('training...')
             loss_train, mcc_t, lr_rate, self.optimizer = self.network_module.train_pass(train_loader=self.train_loader, batch_size=self.batch_size,
                                                                            results_module=self.model_report, optimizer=self.optimizer, asynchronity=self.asynchronity)
 
             if self.val_loader is not None:
                 #  validation
                 print('validating...')
-                loss_val, mcc_v = self.network_module.predictive_pass(val_loader=self.val_loader, asynchronity=self.asynchronity, batch_size=self.batch_size)
+                loss_val, mcc_v = self.network_module.validation_pass(val_loader=self.val_loader, asynchronity=self.asynchronity, batch_size=self.batch_size)
 
             if self.model_report:
                 self.model_report.add_epoch_info(epoch=epoch, loss_t=loss_train, loss_v=loss_val,
@@ -103,7 +108,7 @@ class Train_NeuralNetwork:
 
             if self.model_storage != "last_epoch":
                 if max_mcc_val < mcc_v:
-                    self.network_module.save_model(optimizer=self.optimizer.optimizer, loss=loss, mcc_val=mcc_v, epoch=epoch)
+                    self.network_module.save_model(optimizer=self.optimizer.optimizer, loss=loss_train, mcc_val=mcc_v, epoch=epoch)
                     max_mcc_val = mcc_v
 
             if self.early_stopping is not None:

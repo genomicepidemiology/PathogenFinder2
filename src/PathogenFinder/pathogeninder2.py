@@ -1,6 +1,8 @@
 import argparse
 import os
 from pathlib import Path
+import pandas as pd
+import torch
 
 
 from preprocessdata.prott5_embedder import ProtT5_Embedder
@@ -40,7 +42,7 @@ def cl_arguments():
     inference_parser.add_argument("-i", "--inputData", help="Input data for inference")
     inference_parser.add_argument("-w", "--weightsModel", help="Weights used by the deep learning model to predict")
     inference_parser.add_argument("-f", "--formatSeq", help="The format of the input data.",
-                                    choices=["genome", "proteome", "embeddings"], required=True)
+                                    choices=["genome", "proteome", "embeddings"])
 
 
     hyperopt_parser = subparsers.add_parser("hyperparam_opt",
@@ -51,8 +53,8 @@ def cl_arguments():
 
 class PathogenFinder2:
 
-    def __init__(self, output_folder, model_parameters, misc_parameters):
-        self.output_folder = os.path.abspath(output_folder)
+    def __init__(self, model_parameters, misc_parameters):
+        self.output_folder = os.path.abspath(misc_parameters["Results Folder"])
         os.mkdir(self.output_folder)
 
         self.model = Pathogen_DLModel(model_parameters=model_parameters, misc_parameters=misc_parameters,
@@ -62,6 +64,7 @@ class PathogenFinder2:
 
     def predict_proteincontent(self, input_seq, preprocess_folder, prodigal_path="pyrodigal"):
         # Set up folder
+        print("Using device: {}".format("cpu"))
         log_folder = "{}/prodigal_log_files".format(preprocess_folder)
         os.mkdir(log_folder)
 
@@ -72,6 +75,8 @@ class PathogenFinder2:
 
     def inference_embeddings(self, embed_out, input_seq=None, input_txt=None, model_path=None,
                                 pool_mode="mean", split_kmer=True):
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        print("Using device: {}".format(device))
 
         filename, ext = get_filename(input_seq)
         embedding_file = "{}/{}.h5".format(embed_out, filename)
@@ -89,25 +94,54 @@ class PathogenFinder2:
             embeder = ProtT5_Embedder()
             wrapper_multipleCore(embeder=embeder, path_file=file_path,
                         emb_path=embedding_file, pool_mode=pool_mode, split_kmer=split_kmer)
-        return True
+        return embedding_file
 
-    def inference(self, input_seq, bio_seq):
-        input_seq = os.path.abspath(input_seq)
+    def make_input(self, inference_parameters):
+        if inference_parameters["Multiple Files"]:
+            metadata_file = pd.read_csv(inference_parameters["Input Data"], sep="\t", names=["Input Data"])
+            
+        else:
+            metadata = pd.DataFrame({"Input Files":[inference_parameters["Input Data"]]})
+        metadata["File_Genome"] = None
+        metadata["File_Proteins"] = None
+        metadata["File_Embedding"] = None
+        return metadata
+
+
+    def inference(self, inference_parameters):
+        input_metadata = self.make_input(inference_parameters=inference_parameters)
         preprocess_folder = "{}/preprocessdata".format(self.output_folder)
         os.mkdir(preprocess_folder)
+        
+        for n in range(len(input_metadata)):
+            print("================== Infering {} file =====================".format(input_metadata.loc[n, "Input Files"]))
+            input_metadata[n, "File_Genome"] = os.path.abspath(input_metadata.loc[n, "Input Files"])        
 
-        if bio_seq == "genome":
-            proteome_path = self.predict_proteincontent(input_seq=input_seq, out_folder=preprocess_folder)
-        else:
-            proteome_path = input_seq
-        if bio_seq == "genome" or bio_seq == "proteome":
-            print(proteome_path)
-            embeddings_path = self.inference_embeddings(embed_out=preprocess_folder, input_seq=proteome_path)
-        else:
-            embeddings_path = proteome_path
+            if inference_parameters["Sequence Format"] == "genome":
+                print("Predicting the protein content.")
+                input_metadata.loc[n, "File_Proteins"] = self.predict_proteincontent(
+                                                    input_seq=input_metadata.loc[n, "File_Genome"], preprocess_folder=preprocess_folder)
+            else:
+                input_metadata.loc[n, "File_Genome"] = None
+                input_metadata.loc[n, "File_Proteins"] = input_metadata.loc[n,"Input Files"]
+
+            if inference_parameters["Sequence Format"] == "genome" or inference_parameters["Sequence Format"] == "proteome":
+                print("Predicting the embeddings of the protein content")
+                input_metadata.loc[n, "File_Embedding"] = self.inference_embeddings(
+                                                    embed_out=preprocess_folder, input_seq=input_metadata.loc[n, "File_Proteins"])
+            else:
+                input_metadata.loc[n, "File_Proteins"] = None
+                input_metadata.loc[n, "File_Embedding"] = input_metadata.loc[n, "Input Files"]
+        metadata_file = "{}/data_input.tsv".format(self.output_folder)
+
+        input_metadata.to_csv(metadata_file, sep="\t", index=False)
+        inference_parameters["Input Metadata"] = metadata_file
+        print("Predicting the pathogenicity of the samples in the files {}".format(", ".join(input_metadata["Input Files"].tolist())))
+        device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        print("Using device: {}".format(device))
+        self.model.predict_model(inference_parameters=inference_parameters)
 
     def train(self, train_parameters):
-        print(train_parameters)
         self.model.train_model(train_parameters=train_parameters)
 
 
@@ -121,8 +155,7 @@ def main(args):
     pf2_config.load_json_params(json_file=args.config)
     pf2_config.load_args_params(args=args)
 
-    pathogenfinder = PathogenFinder2(output_folder=pf2_config.misc_parameters["Results Folder"],
-                                    model_parameters=pf2_config.model_parameters,
+    pathogenfinder = PathogenFinder2(model_parameters=pf2_config.model_parameters,
                                     misc_parameters=pf2_config.misc_parameters)
     if args.action == "Train":
         pathogenfinder.train(train_parameters=pf2_config.train_parameters)
@@ -131,8 +164,7 @@ def main(args):
     elif args.action == "Hyperparam_opt":
         pathogenfider.hyperparam_opt()
     elif args.action == "Inference":
-        pathogenfinder.inference(input_seq=pf2_config.inference_parameters["Input Data"],
-                                    bio_seq=pf2_config.inference_parameters["Sequence Format"])
+        pathogenfinder.inference(inference_parameters=pf2_config.inference_parameters)
     else:
         raise ValueError("No valid option for using pathogenfinder was selected")
 

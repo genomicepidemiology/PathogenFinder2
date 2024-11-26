@@ -45,10 +45,7 @@ class PhenotypeInteger(object):
 
     def __call__(self, sample):
         pathophenotype = sample["Label"]
-        if pathophenotype is not None:
-            patho_int = np.array([self.pathointeger[pathophenotype]], dtype=np.float32)
-        else:
-            patho_int = np.nan
+        patho_int = np.array([self.pathointeger[pathophenotype]], dtype=np.float32)
         sample["Label"] = patho_int
         return sample
 
@@ -86,7 +83,7 @@ class Normalize_Data:
         embeddings = sample["Input"]
         norm_embeddings = (embeddings-self.mean_vec)/self.std_vec
         sample["Input"] = norm_embeddings.astype(np.float32)
-        return saple
+        return sample
 
 class ProteomeDataset(Dataset):
 
@@ -99,24 +96,31 @@ class ProteomeDataset(Dataset):
 	                  "Pathogenic": np.array([1,0], dtype=int)}
 		    }
 
-    def __init__(self, csv_file, root_dir=None, input_type="protein_embeddings",
-                 sampling=False, transform=None):
+    def __init__(self, csv_file, root_dir, input_type="protein_embeddings",
+                 sampling=False, cluster_tsv=None, transform=None, weighted=False,
+                 load_data=True):
         self.landmarks_frame = pd.read_csv(csv_file, sep="\t")
-        if root_dir is None:
-            self.root_dir = ""
-        else:
-            self.root_dir = os.path.abspath(root_dir)
+        self.root_dir = os.path.abspath(root_dir)
         self.transform = transform
-
+        if not weighted:
+            self.weights = torch.Tensor([1.])
+        else:
+            weights = ProteomeDataset.get_weights_classes(df=self.landmarks_frame)
+            self.weights = torch.Tensor(weights)
+        self.load_data = load_data
         if input_type in ["protein_embeddings", "proteome_embedding", "protein_count"]:
             self.input_type = input_type
         else:
             raise ValueError("The input type {} is not available".format(input_type))
 
-        if "PathoPhenotype" in self.landmarks_frame.columns:
-            self.prediction_dataset = False
-        else:
-            self.prediction_dataset = True
+    def get_weights(self):
+        return self.weights
+
+    @staticmethod
+    def get_weights_classes(df, homology_sample=False):
+        counts_patho = df["PathoPhenotype"].value_counts().to_frame()
+        weights = [float(counts_patho.loc["No Pathogenic","count"])/float(counts_patho.loc["Pathogenic","count"])]
+        return weights
 
     def __len__(self):
         return len(self.landmarks_frame)
@@ -126,25 +130,24 @@ class ProteomeDataset(Dataset):
             idx = idx.tolist()
         file_name = self.landmarks_frame.iloc[idx]["File_Embedding"]
         file_path = os.path.join(self.root_dir, file_name)
-        if self.input_type == "protein_embeddings":
-            input_nn, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
-        elif self.input_type == "proteome_embedding":
-            input_nn, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
-            input_nn = np.sum(input_nn, axis=1)
-        elif self.input_type == "protein_count":
-            try:
-                input_nn = [self.landmarks_frame.iloc[idx]["Protein Count"]]
-                length_proteome = input_nn
-                protein_names = [None]
-            except KeyError:
-                _, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
-                input_nn = length_proteome
-            input_nn = np.array(input_nn, dtype=np.float32)
-        if not self.prediction_dataset:
-            pathophenotype = self.landmarks_frame.iloc[idx]["PathoPhenotype"]
+        if self.load_data:
+            if self.input_type == "protein_embeddings":
+                input_nn, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
+            elif self.input_type == "proteome_embedding":
+                input_nn, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
+                input_nn = np.sum(input_nn, axis=1)
+            elif self.input_type == "protein_count":
+                try:
+                    input_nn = [self.landmarks_frame.iloc[idx]["Protein Count"]]
+                    length_proteome = input_nn
+                    protein_names = [None]
+                except KeyError:
+                    _, length_proteome, protein_names = ProteomeDataset.open_embedfile(file_path)
+                    input_nn = length_proteome
+                input_nn = np.array(input_nn, dtype=np.float32)
         else:
-            pathophenotype = None
-
+            input_nn, length_proteome, protein_names = np.empty((2,2)), self.landmarks_frame.iloc[idx]["Protein Count"], None
+        pathophenotype = self.landmarks_frame.iloc[idx]["PathoPhenotype"]
         sample = {'Input': input_nn, 'Label': pathophenotype, "Protein Count": length_proteome,
                   "Protein_IDs": protein_names, "File_Name": file_name}
         if self.transform is not None:
@@ -368,8 +371,19 @@ class BucketSampler(Sampler):
 class NN_Data:
     
     @staticmethod
-    def create_dataset(input_type, data_df, data_loc=None, data_type="train", dual_pred=False):
+    def create_dataset(input_type, data_df, data_loc, data_type="train", dual_pred=False, cluster_sample=False,
+                        cluster_tsv=None, weighted=False, normalize=False, fraction_embeddings=False):
         transform_data = []
+
+        if normalize:
+            transform_data.append(Normalize_Data(normalize))
+        else:
+            pass
+
+        if fraction_embeddings:
+            transform_data.append(FractionEmbeddings(fraction_embeddings))
+        else:
+            pass
 
         if dual_pred:
             transform_data.append(PhenotypeInteger(prediction="Dual"))
@@ -381,8 +395,13 @@ class NN_Data:
         if data_type == "prediction":
             dataset = ProteomeDataset(input_type=input_type, csv_file=data_df, root_dir=data_loc, transform=transform_compose)
         elif data_type == "train":
-            dataset = ProteomeDataset(input_type=input_type, csv_file=data_df, root_dir=data_loc,
-                                        transform=transform_compose)
+            if not cluster_sample:
+                dataset = ProteomeDataset(input_type=input_type, csv_file=data_df, root_dir=data_loc,
+                                        transform=transform_compose, weighted=weighted)
+            else:
+                dataset = ProteomeDataset(input_type=input_type, csv_file=data_df, root_dir=data_loc,
+                            transform=transform_compose, cluster_sampling=cluster_sample,
+                            cluster_tsv=cluster_tsv, weighted=weighted)
         else:
             raise ValueError("The data_type {} is not an option (choose between train and prediction)".format(
                                 data_type))

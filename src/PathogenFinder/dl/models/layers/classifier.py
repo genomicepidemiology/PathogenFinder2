@@ -17,12 +17,13 @@ class Classifier(nn.Module):
         elif length_information == "add" or length_information == "concat1":
             self.length_information = length_information
             self.length_step = nn.Sequential(
-                SinusoidalPositionEmbeddings(length_dim),
-                nn.Linear(length_dim, dim),
-                nn.GELU(),
-                nn.Linear(dim, dim),
-                Permute([0, 2, 1]),
-                )
+                                    SinusoidalPositionEmbeddings(length_dim),
+                                    nn.Linear(length_dim, dim),
+                                    nn.GELU(),
+                                    nn.Linear(dim, dim),
+                                    Permute([0, 2, 1]),
+                                    nn.Flatten(start_dim=1)
+                                    )
             if length_information == "concat1":
                 dim = dim*2
         else:
@@ -42,8 +43,10 @@ class Classifier(nn.Module):
         elif self.length_information == "add":
             x = x + self.length_step(t)
         elif self.length_information == "concat1":
+            print(x.shape, self.length_step(t).shape)
             x = torch.concat((x, self.length_step(t)), axis=1)
         else:
+            print(x.shape)
             x = x
         x = self.norm_layer(x)
         x = self.linear_out(x)

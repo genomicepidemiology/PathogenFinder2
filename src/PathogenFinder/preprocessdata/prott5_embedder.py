@@ -20,16 +20,14 @@ import torch
 import h5py
 from transformers import T5EncoderModel, T5Tokenizer
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-print("Using device: {}".format(device))
-
-
 
 class ProtT5_Embedder:
 
     def __init__(self, model_dir=None,
               transformer_link="Rostlab/prot_t5_xl_half_uniref50-enc",
               pool_mode="mean"):
+
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         self.model, self.vocab = self.get_T5_model(model_dir, transformer_link)
         if not pool_mode:
@@ -48,9 +46,9 @@ class ProtT5_Embedder:
             print("Loading cached model from: {}".format(model_dir))
             print("##########################")
         model = T5EncoderModel.from_pretrained(transformer_link, cache_dir=model_dir)
-        model.full() if device=='cpu' else model.half() # only cast to full-precision if no GPU is available
+        model.full() if self.device=='cpu' else model.half() # only cast to full-precision if no GPU is available
 
-        model = model.to(device)
+        model = model.to(self.device)
         model = model.eval()
         vocab = T5Tokenizer.from_pretrained(transformer_link, do_lower_case=False )
         return model, vocab
@@ -100,8 +98,8 @@ class ProtT5_Embedder:
         identifiers = []
         count = 1
         while True:
-            input_slice = input[:, start_split:end_split].to(device)
-            attmask_slice = att_mask[:, start_split:end_split].to(device)
+            input_slice = input[:, start_split:end_split].to(self.device)
+            attmask_slice = att_mask[:, start_split:end_split].to(self.device)
             with torch.no_grad():
                 embedding_repr_slice = self.model(input_slice,
                                             attention_mask=attmask_slice)
@@ -209,8 +207,8 @@ class ProtT5_Embedder:
                 pdb_ids, seqs, seq_lens = zip(*batch)
                 batch = list()
                 token_encoding = self.vocab.batch_encode_plus(seqs, add_special_tokens=True, padding="longest")
-                input_ids      = torch.tensor(token_encoding['input_ids']).to(device)
-                attention_mask = torch.tensor(token_encoding['attention_mask']).to(device)
+                input_ids      = torch.tensor(token_encoding['input_ids']).to(self.device)
+                attention_mask = torch.tensor(token_encoding['attention_mask']).to(self.device)
                 oom_err = False
                 try:
                     with torch.no_grad():
