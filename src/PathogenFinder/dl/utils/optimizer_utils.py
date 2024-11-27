@@ -37,7 +37,7 @@ class Optimizer:
                                                 max_lr=self.learning_rate, final_div_factor=end_lr,
                                                 epochs=epochs, steps_per_epoch=steps)
         elif scheduler_type == "ReduceLROnPlateau":
-            self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, "min", patience=20)
+            self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, "min", patience=10, factor=0.1)
         elif scheduler_type == "MultiStepLR":
             self.lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[10, 15, 55, 70, 80, 90, 95], gamma=0.5)
         else:

@@ -54,10 +54,10 @@ class Network_Module:
         loss = checkpoint['loss']
         return {"Optimizer": optimizer, "Epoch": epoch, "Loss": loss}
 
-    def load_model(self, weights_path):
+    def load_model(self, weights_path, optimizer=None):
         weights = torch.load(weights_path, weights_only=True)
         if "optimizer_state_dict" in weights:
-            model_params = self.load_checkpoint(checkpoint=weights)
+            model_params = self.load_checkpoint(checkpoint=weights, optimizer=optimizer)
         else:
             model_params = self.load_weights(weights=weights)
         return model_params

@@ -110,27 +110,20 @@ class Pathogen_DLModel:
                                         asynchronity=self.model_parameters["Data Parameters"]["asynchronity"],
                                         bucketing=self.model_parameters["Data Parameters"]["bucketing"],
                                         stratified=self.model_parameters["Data Parameters"]["stratified"])
-        if self.model_parameters["Network Weights"] is not None:
-            model_params = network_module.load_model(self.model_parameters["Network Weights"])
-        else:
-            model_params = None
-        
-        if model_params is None:
-            train_instance.set_optimizer(optimizer_class=train_parameters["Optimizer Parameters"]["optimizer"],
+
+        train_instance.set_optimizer(optimizer_class=train_parameters["Optimizer Parameters"]["optimizer"],
                                         learning_rate=train_parameters["Optimizer Parameters"]["learning_rate"],
                                         weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
                                         amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
                                         warmup_period=train_parameters["Optimizer Parameters"]["warm_up"],
                                         patience=None, milestones=None, gamma=None, end_lr=None,
                                         epochs=train_parameters["Epochs"])
+        
+        if self.model_parameters["Network Weights"] is not None:
+            model_params = network_module.load_model(self.model_parameters["Network Weights"],
+                                                        optimizer=train_instance.optimizer.optimizer)
         else:
-            train_instance.set_optimizer(optimizer=optimizer["Optimizer"],
-                                        learning_rate=optimizer["Optimizer"].param_groups[-1]['lr'],
-                                        weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
-                                        amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
-                                        warmup_period=False,
-                                        patience=None, milestones=None, gamma=None, end_lr=None,
-                                        epochs=train_parameters["Epochs"])
+            model_params = None
 
         train_instance(epochs=train_parameters["Epochs"], model_params=model_params)
 

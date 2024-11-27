@@ -21,8 +21,7 @@ class Classifier(nn.Module):
                                     nn.Linear(length_dim, dim),
                                     nn.GELU(),
                                     nn.Linear(dim, dim),
-                                    Permute([0, 2, 1]),
-                                    nn.Flatten(start_dim=1)
+                                    Permute([0, 2, 1])
                                     )
             if length_information == "concat1":
                 dim = dim*2
@@ -37,13 +36,16 @@ class Classifier(nn.Module):
 
 
     def forward(self, x, t=None):
+
         if self.length_information == "concat2":
             t = t.unsqueeze(-1)
             x = torch.concat((x, t), axis=1)
         elif self.length_information == "add":
-            x = x + self.length_step(t)
+            length_step = torch.squeeze(self.length_step(t), -1)
+            x = x + length_step
         elif self.length_information == "concat1":
-            x = torch.concat((x, self.length_step(t)), axis=1)
+            length_step = torch.squeeze(self.length_step(t), -1)
+            x = torch.concat((x, length_step), axis=1)
         else:
             x = x
         x = self.norm_layer(x)
