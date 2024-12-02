@@ -1,6 +1,79 @@
 import pickle
 import wandb
 import torch
+import os
+import pandas as pd
+from pathlib import Path
+
+class Inference_Report:
+
+    def __init__(self, out_folder):
+
+        self.out_folder = out_folder
+
+    def reports_sample(self, pathopred_ensemble, prot_feat_ensemble, embedding_maps_ensemble):
+        pathodf = self.pathopred_results(pathopred_ensemble)
+        proteinfeats = self.proteinfeat_results(prot_feat_ensemble)
+        report = {}
+        for n in range(len(pathodf)):
+            filepath = pathodf.loc[n, "File Name"]
+            filename = Path(filepath).stem
+            protfeat = proteinfeats[filepath]
+            report[filename] = {"Predictions": pathodf.loc[n], "ProteinFeats": protfeat}
+        return report
+
+    def save_report(self, sample_report):
+        for k, val in sample_report.items():
+            folder_out_sample = "{}/{}".format(self.out_folder, k)
+            os.mkdir(folder_out_sample)
+            pred_df = pd.DataFrame(val["Predictions"]).T
+            pred_df.to_csv("{}/predictions.tsv".format(folder_out_sample), sep="\t", index=False)
+            val["ProteinFeats"].to_csv("{}/attentions.tsv".format(folder_out_sample), sep="\t", index=False)
+
+    def pathopred_results(self, pathopred_ensemble):
+        df = pathopred_ensemble[0]
+        df = df.rename(columns={c: c+'_0' for c in df.columns if c not in ["File Name"]})
+        pred_cols = ["Prediction_0"]
+        count = 1
+        for d in pathopred_ensemble[1:]:
+            d_suff = d.rename(columns={c: c+'_{}'.format(count) for c in d.columns if c not in ["File Name"]})
+            df = df.merge(d_suff, on='File Name')
+            pred_cols.append("Prediction_{}".format(count))
+            count += 1
+        df["Prediction_mean"] = df[pred_cols].mean(axis=1)
+        df["Prediction_std"] = df[pred_cols].std(axis=1)
+        df["Binary Prediction_mean"] = 0
+        df.loc[df["Prediction_mean"]>0.5, "Binary Prediction_mean"] = 1
+        df["Phenotype_mean"] = "Human Non Pathogenic"
+        df.loc[df["Prediction_mean"]>0.5, "Phenotype_mean"] = "Human Pathogenic"
+        return df
+        
+    def proteinfeat_results(self, prot_feat_ensemble):
+        protfeat_dict = {}
+        pred_cols = []
+        for n in range(len(prot_feat_ensemble)):
+            pred_cols.append("Attentions_{}".format(n))
+            for k, val in prot_feat_ensemble[n].items():
+                protfeat_init = val.rename(columns={c: c+'_{}'.format(n) for c in val.columns if c not in ["ProteinIDs"]})
+                if k not in protfeat_dict:
+                    protfeat_dict[k] = protfeat_init
+                else:
+                    protfeat_dict[k] = protfeat_dict[k].merge(protfeat_init, on="ProteinIDs")
+        for k, val in protfeat_dict.items():
+            val["Attentions_mean"] = val[pred_cols].mean(axis=1)
+            val["Attentions_std"] = val[pred_cols].std(axis=1)
+            val["Attentions_sum"] = val[pred_cols].sum(axis=1)
+        return protfeat_dict
+
+
+    def embeddingmap_results(self, embedding_maps_ensemble):
+        pass
+
+
+
+
+
+
 
 class Memory_Report:
 

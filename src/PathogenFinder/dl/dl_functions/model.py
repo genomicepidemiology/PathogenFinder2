@@ -1,12 +1,14 @@
 import random
 import torch
 import numpy as np
+import pandas as pd
 
 from dl.dl_functions.train_model import Train_NeuralNetwork
 from dl.dl_functions.inference_model import Inference_NeuralNetwork
+from dl.dl_functions.test_model import Test_NeuralNetwork
 from dl.utils.nn_utils import Network_Module
 from dl.utils.data_utils import NN_Data
-from dl.utils.report_utils import ReportNN, Memory_Report
+from dl.utils.report_utils import ReportNN, Memory_Report, Inference_Report
 
 
 
@@ -110,48 +112,80 @@ class Pathogen_DLModel:
                                         asynchronity=self.model_parameters["Data Parameters"]["asynchronity"],
                                         bucketing=self.model_parameters["Data Parameters"]["bucketing"],
                                         stratified=self.model_parameters["Data Parameters"]["stratified"])
-
-        train_instance.set_optimizer(optimizer_class=train_parameters["Optimizer Parameters"]["optimizer"],
+        if self.model_parameters["Network Weights"] is not None:
+            model_params = network_module.load_model(self.model_parameters["Network Weights"])
+        else:
+            model_params = None
+        
+        if model_params is None:
+            train_instance.set_optimizer(optimizer_class=train_parameters["Optimizer Parameters"]["optimizer"],
                                         learning_rate=train_parameters["Optimizer Parameters"]["learning_rate"],
                                         weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
                                         amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
                                         warmup_period=train_parameters["Optimizer Parameters"]["warm_up"],
                                         patience=None, milestones=None, gamma=None, end_lr=None,
                                         epochs=train_parameters["Epochs"])
-        
-        if self.model_parameters["Network Weights"] is not None:
-            model_params = network_module.load_model(self.model_parameters["Network Weights"],
-                                                        optimizer=train_instance.optimizer.optimizer)
         else:
-            model_params = None
+            train_instance.set_optimizer(optimizer=optimizer["Optimizer"],
+                                        learning_rate=optimizer["Optimizer"].param_groups[-1]['lr'],
+                                        weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
+                                        amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
+                                        warmup_period=False,
+                                        patience=None, milestones=None, gamma=None, end_lr=None,
+                                        epochs=train_parameters["Epochs"])
 
         train_instance(epochs=train_parameters["Epochs"], model_params=model_params)
 
-    def test_model(self):
-        pass
+    def test_model(self, predicted_data, test_parameters):
+        label_df = pd.read_csv(test_parameters["Label File"], sep="\t")
+        
+        test_instance = Test_NeuralNetwork(out_folder=self.misc_parameters["Results Folder"])
+
+        results_df = test_instance.create_results(label_df=label_df, predicted_data=predicted_data)
+        measures = test_instance.calculate_measures(results_df=results_df)
+        cm_display, roc_display, curve_cal = test_instance.graph_objects(results_df=results_df)
+        test_instance.save_results(measures=measures, cm_display=cm_display, roc_display=roc_display, curve_cal=curve_cal)
+
 
     def predict_model(self, inference_parameters):
-        network_module = Network_Module(model_type=self.model_type,
+
+        pathopred_ensemble = []
+        protein_features_ensemble = []
+        embedding_maps_ensemble = []
+
+        for network_weights in self.model_parameters["Network Weights"]:
+            network_module = Network_Module(model_type=self.model_type,
                                         out_folder=self.misc_parameters["Results Folder"],
                                         model_parameters=self.model_parameters,
                                         mixed_precision=self.model_parameters["Mixed Precision"],
                                         results_module=self.reportNN,
                                         memory_profiler=self.memory_report,
-                                        loss_type=self.model_parameters["Loss Function"])
-
-        inference_df = NN_Data.create_dataset(input_type="protein_embeddings",
+                                        loss_type=self.model_parameters["Loss Function"],
+                                        )
+            inference_df = NN_Data.create_dataset(input_type="protein_embeddings",
                                                 data_df=inference_parameters["Input Metadata"],
                                                 data_type="prediction", dual_pred=False)
 
-        inference_instance = Inference_NeuralNetwork(network_module=network_module,
+            inference_instance = Inference_NeuralNetwork(network_module=network_module,
                                                     model_report=self.reportNN,
-                                                    model_weights=self.model_parameters["Network Weights"],
+                                                    model_weights=network_weights,
                                                     out_folder=self.misc_parameters["Results Folder"])
-        inference_instance.set_dataloader(inference_dataset=inference_df,
-                                    num_workers=self.model_parameters["Data Parameters"]["num_workers"],
-                                    asynchronity=self.model_parameters["Data Parameters"]["asynchronity"])
+            inference_instance.set_dataloader(inference_dataset=inference_df,
+                                        num_workers=self.model_parameters["Data Parameters"]["num_workers"],
+                                        asynchronity=self.model_parameters["Data Parameters"]["asynchronity"])
 
-        inference_instance()
+            pathopred, protein_features, embedding_map = inference_instance()
+            pathopred_ensemble.append(pathopred)
+            protein_features_ensemble.append(protein_features)
+            embedding_maps_ensemble.append(embedding_map)
+
+        results_module = Inference_Report(out_folder=self.misc_parameters["Results Folder"])
+        sample_report = results_module.reports_sample(pathopred_ensemble=pathopred_ensemble, prot_feat_ensemble=protein_features_ensemble,
+                                    embedding_maps_ensemble=embedding_maps_ensemble)
+        results_module.save_report(sample_report=sample_report)
+        return sample_report
+
+
 
 
     def hyperparamOpt_model(self):

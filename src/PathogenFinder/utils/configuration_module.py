@@ -44,7 +44,7 @@ class ConfigurationPF2:
                                                     "Input Location", "Multiple Files", "Input Metadata"])
         elif mode == "Test":
             self.test_parameters = self.init_params(param_group="Test Parameters",
-                                    list_params=["Test DF", "Test Loc"])
+                                    list_params=["Input Data", "Label File", "Sequence Format"])
         elif mode == "Hyperparam_Opt":
             self.hyperopt_parameters = self.init_params(parm_group="Hyperparam_Opt Parameters",
                                     list_params=["Optimizing Parameters", "Name Study", "Group",

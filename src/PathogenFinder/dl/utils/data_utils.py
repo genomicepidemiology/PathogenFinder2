@@ -48,7 +48,8 @@ class PhenotypeInteger(object):
         if pathophenotype is not None:
             patho_int = np.array([self.pathointeger[pathophenotype]], dtype=np.float32)
         else:
-            patho_int = np.nan
+            patho_int = np.empty((1))
+            patho_int[:] = np.nan
         sample["Label"] = patho_int
         return sample
 

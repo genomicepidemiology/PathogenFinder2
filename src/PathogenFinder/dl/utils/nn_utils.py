@@ -54,10 +54,10 @@ class Network_Module:
         loss = checkpoint['loss']
         return {"Optimizer": optimizer, "Epoch": epoch, "Loss": loss}
 
-    def load_model(self, weights_path, optimizer=None):
+    def load_model(self, weights_path):
         weights = torch.load(weights_path, weights_only=True)
         if "optimizer_state_dict" in weights:
-            model_params = self.load_checkpoint(checkpoint=weights, optimizer=optimizer)
+            model_params = self.load_checkpoint(checkpoint=weights)
         else:
             model_params = self.load_weights(weights=weights)
         return model_params
@@ -212,6 +212,7 @@ class Network_Module:
         file_tensor = []
         protID_tensor = []
         att_tensor = []
+        lengths_tensor = []
         batch_n = 0
 
         with torch.inference_mode():
@@ -223,6 +224,7 @@ class Network_Module:
                 protein_ids = batch["Protein_IDs"]
                 embeddings = batch["Input"]
                 lengths = batch["Protein Count"]
+                lengths_tensor.append(lengths)
                 #  sending data to device
                 embeddings = embeddings.to(self.device, non_blocking=asynchronity)
                 lengths = lengths.to(self.device, non_blocking=asynchronity)
@@ -233,13 +235,12 @@ class Network_Module:
 
                 pred_c = predictions.detach().cpu()
                 pred_tensor[pos_first:pos_last,:] = pred_c
-                file_tensor.extend(file_names)
+                file_tensor.append(file_names)
                 protID_tensor.append(protein_ids)
 
                 attentions = attentions.detach().cpu()
                 att_tensor.append(attentions)
 
-                #  clean gpu (maybe unnecessary
                 batch_n += 1
                 count += batch_size
 
@@ -247,7 +248,7 @@ class Network_Module:
             pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]
             pred_tensor = (pred_tensor+1)/2
 
-        return pred_tensor.T.tolist(), file_tensor, protID_tensor, att_tensor
+        return pred_tensor.T, file_tensor, protID_tensor, att_tensor, lengths_tensor
 
     @staticmethod
     def set_sensible_batch_size(batch_size, min_batch_size=8, max_batch_size=45):

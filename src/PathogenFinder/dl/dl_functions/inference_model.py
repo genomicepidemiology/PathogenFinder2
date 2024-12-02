@@ -1,4 +1,5 @@
 import pandas as pd
+import torch
 
 from dl.utils.data_utils import NN_Data
 from dl.utils.nn_utils import Network_Module
@@ -27,14 +28,31 @@ class Inference_NeuralNetwork:
         self.inference_loader = NN_Data.load_data(inference_dataset, self.batch_size,
                                         num_workers=num_workers, pin_memory=asynchronity)
 
-    def create_predresults(self, predictions, file_names, out_folder):
+    def create_predresults(self, predictions, file_names, protids, attentions, lengths):
+        pathopred = []
+        protein_features = {}
+        embedding_map = {}
+
+        for b in range(len(file_names)):
+
+            for n in range(len(file_names[b])):
+                filename = file_names[b][n]
+                pathodict = {"File Name":filename, "Prediction":None, "Binary Prediction": None, "Protein Count": None, "Phenotype":""}
+
+                pathodict["Prediction"] = float(predictions[b][n])
+                if pathodict["Prediction"] > 0.5:
+                    pathodict["Binary Prediction"] = 1
+                    pathodict["Phenotype"] = "Human Pathogenic"
+                else:
+                    pathodict["Binary Prediction"] = 0
+                    pathodict["Phenotype"] = "Human Non Pathogenic"
+                pathodict["Protein Count"] = int(lengths[b][n])
+                pathopred.append(pathodict)
+                attention_ind = torch.squeeze(attentions[b][n])[:int(lengths[b][n])]
+                protein_features[filename] = pd.DataFrame({"ProteinIDs": protids[b][n], "Attentions": attention_ind})
+        pathopred = pd.DataFrame(pathopred)
+        return pathopred, protein_features, embedding_map
         
-        results_file = "{}/predictions.txt".format(out_folder)
-        df_results = pd.DataFrame(data={"File Names":file_names,
-                                        "Predictions": predictions})
-        with open(results_file, 'w') as f:
-            f.write('## RESULTS PATHOGENFINDER2 ##\n')
-            df_results.to_csv(results_file, mode='a', index=False, sep="\t")
 
     def protein_analysis(self):
         pass
@@ -45,14 +63,17 @@ class Inference_NeuralNetwork:
 
     def __call__(self):
 
-        predictions, file_names, protID_tensor, att_tensor = self.network_module.predictive_pass(val_loader=self.inference_loader,
+        (predictions, file_names, protID_tensor,
+                att_tensor, protein_count) = self.network_module.predictive_pass(val_loader=self.inference_loader,
                                                                     asynchronity=self.asynchronity, batch_size=self.batch_size)
         if self.network_module.memory_profiler:
             self.network_module.memory_profiler.step()
     
-        self.create_predresults(predictions=predictions, file_names=file_names,
-                                    out_folder=self.out_folder)
+        pathopred, protein_features, embedding_map = self.create_predresults(predictions=predictions, file_names=file_names,
+                                    protids=protID_tensor, attentions=att_tensor, lengths=protein_count)
         if self.network_module.memory_profiler:
             self.network_module.memory_profiler.stop_memory_reports()
+
+        return pathopred, protein_features, embedding_map
 
 
