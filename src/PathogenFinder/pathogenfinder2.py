@@ -114,7 +114,7 @@ class PathogenFinder2:
         
         for n in range(len(input_metadata)):
             print("================== Infering {} file =====================".format(input_metadata.loc[n, "Input Files"]))
-            input_metadata[n, "File_Genome"] = os.path.abspath(input_metadata.loc[n, "Input Files"])        
+#            input_metadata[n, "File_Genome"] = os.path.abspath(input_metadata.loc[n, "Input Files"])        
 
             if inference_parameters["Sequence Format"] == "genome":
                 print("Predicting the protein content.")

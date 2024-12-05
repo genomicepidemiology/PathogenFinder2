@@ -25,31 +25,29 @@ class Inference_NeuralNetwork:
             self.batch_size = len(inference_dataset)
 
         self.asynchronity = asynchronity
-        self.inference_loader = NN_Data.load_data(inference_dataset, self.batch_size,
-                                        num_workers=num_workers, pin_memory=asynchronity)
+        self.inference_loader = NN_Data.load_data(inference_dataset, self.batch_size, shuffle=False,
+                                        num_workers=num_workers, pin_memory=asynchronity, drop_last=False)
 
     def create_predresults(self, predictions, file_names, protids, attentions, lengths):
         pathopred = []
         protein_features = {}
         embedding_map = {}
-
+        print(predictions.shape)
         for b in range(len(file_names)):
-
-            for n in range(len(file_names[b])):
-                filename = file_names[b][n]
-                pathodict = {"File Name":filename, "Prediction":None, "Binary Prediction": None, "Protein Count": None, "Phenotype":""}
-
-                pathodict["Prediction"] = float(predictions[b][n])
-                if pathodict["Prediction"] > 0.5:
-                    pathodict["Binary Prediction"] = 1
-                    pathodict["Phenotype"] = "Human Pathogenic"
-                else:
-                    pathodict["Binary Prediction"] = 0
-                    pathodict["Phenotype"] = "Human Non Pathogenic"
-                pathodict["Protein Count"] = int(lengths[b][n])
-                pathopred.append(pathodict)
-                attention_ind = torch.squeeze(attentions[b][n])[:int(lengths[b][n])]
-                protein_features[filename] = pd.DataFrame({"ProteinIDs": protids[b][n], "Attentions": attention_ind})
+            filename = file_names[b]
+            pathodict = {"File Name":filename, "Prediction":None, "Binary Prediction": None, "Protein Count": None, "Phenotype":""}
+            pathodict["Prediction"] = float(predictions[int(b)])
+#                pathodict["Prediction"] = float(predictions[b][n])
+            if pathodict["Prediction"] > 0.5:
+                pathodict["Binary Prediction"] = 1
+                pathodict["Phenotype"] = "Human Pathogenic"
+            else:
+                pathodict["Binary Prediction"] = 0
+                pathodict["Phenotype"] = "Human Non Pathogenic"
+            pathodict["Protein Count"] = int(lengths[b])
+            pathopred.append(pathodict)
+#            attention_ind = torch.squeeze(attentions[b][n])[:int(lengths[b][n])]
+ #           protein_features[filename] = pd.DataFrame({"ProteinIDs": protids[b][n], "Attentions": attention_ind})
         pathopred = pd.DataFrame(pathopred)
         return pathopred, protein_features, embedding_map
         

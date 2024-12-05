@@ -45,7 +45,7 @@ class Train_NeuralNetwork:
                                         shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=stratified)
         if val_dataset is not None:
             self.val_loader = NN_Data.load_data(val_dataset, batch_size, num_workers=num_workers,
-                                        shuffle=True, pin_memory=asynchronity, bucketing=bucketing, stratified=False)
+                                        shuffle=True, pin_memory=asynchronity, bucketing=False, stratified=False)
         else:
             self.val_loader = None
 

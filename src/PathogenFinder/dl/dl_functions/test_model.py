@@ -16,11 +16,15 @@ class Test_NeuralNetwork:
     def create_results(self, label_df, predicted_data):
         label_df["Predicted Label"] = np.nan
         label_df["Predicted Cont"] = np.nan
-        label_df["Predicted std"] = np.nan
+ #       label_df["Predicted std"] = np.nan
         for k, val in predicted_data.items():
             label_df.loc[label_df["File Name"]==k,"Predicted Label"] = val["Predictions"]["Binary Prediction_mean"]
             label_df.loc[label_df["File Name"]==k,"Predicted Cont"] = val["Predictions"]["Prediction_mean"]
-            label_df.loc[label_df["File Name"]==k,"Predicted std"] = val["Predictions"]["Prediction_std"]
+  #          label_df.loc[label_df["File Name"]==k,"Predicted std"] = val["Predictions"]["Prediction_std"]
+        print(predicted_data.keys())
+        print(len(predicted_data.keys()))
+        print(label_df["File Name"])
+        print(label_df[label_df.isnull().any(axis=1)])
         assert not label_df.isnull().values.any()
         return label_df
 

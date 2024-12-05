@@ -208,7 +208,8 @@ class Network_Module:
         loss_pass = 0.
         count = 0
         len_dataloader = len(val_loader)
-        pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device="cpu")
+ #       pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device="cpu")
+        pred_lst = []
         file_tensor = []
         protID_tensor = []
         att_tensor = []
@@ -224,7 +225,7 @@ class Network_Module:
                 protein_ids = batch["Protein_IDs"]
                 embeddings = batch["Input"]
                 lengths = batch["Protein Count"]
-                lengths_tensor.append(lengths)
+                lengths_tensor.extend(lengths)
                 #  sending data to device
                 embeddings = embeddings.to(self.device, non_blocking=asynchronity)
                 lengths = lengths.to(self.device, non_blocking=asynchronity)
@@ -234,8 +235,9 @@ class Network_Module:
                     predictions = torch.sigmoid(predictions_logit)
 
                 pred_c = predictions.detach().cpu()
-                pred_tensor[pos_first:pos_last,:] = pred_c
-                file_tensor.append(file_names)
+#                pred_tensor[pos_first:pos_last,:] = pred_c
+                pred_lst.extend(pred_c)
+                file_tensor.extend(file_names)
                 protID_tensor.append(protein_ids)
 
                 attentions = attentions.detach().cpu()
@@ -243,12 +245,8 @@ class Network_Module:
 
                 batch_n += 1
                 count += batch_size
-
-        if pred_tensor.size()[1] == 2:
-            pred_tensor = pred_tensor[:,0] - pred_tensor[:,1]
-            pred_tensor = (pred_tensor+1)/2
-
-        return pred_tensor.T, file_tensor, protID_tensor, att_tensor, lengths_tensor
+        pred_tensor = torch.Tensor(pred_lst)
+        return pred_tensor, file_tensor, protID_tensor, att_tensor, lengths_tensor
 
     @staticmethod
     def set_sensible_batch_size(batch_size, min_batch_size=8, max_batch_size=45):

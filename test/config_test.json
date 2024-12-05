@@ -1,9 +1,9 @@
 {
 "Misc Parameters": {
 	"Notes": "This is a base config file",
-	"Name": "test1",
-	"Results Folder": "../../test/test1_test",
-	"Actions": ["train"],
+	"Name": "TESTFINAL2",
+	"Results Folder": "/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/TESTFINALYES",
+	"Actions": ["test"],
 	"Report Results": "file",
 	"Project Name": "PathogenFinder2"
 	},
@@ -13,13 +13,13 @@
 	"Input Dimensions": 1024,
 	"Network Structure":{
 		"Stem Cell": true,
-		"Num Blocks":2,
-		"Block Dimensions": 64,
-		"Attention Dimensions": 64,
-		"FNN Dimensions": 0,
-		"Length Information":false,
-		"Length Dimensions": 30,
-		"Residual Attention": false},
+                "Num Blocks":2,
+                "Block Dimensions": 128,
+                "Attention Dimensions": 64,
+                "FNN Dimensions": 0,
+                "Length Information":"concat1",
+                "Length Dimensions": 30,
+                "Residual Attention": false},
 	"Out Dimensions": 1,
 	"Batch Size": 4,
 	"Norm Scale": 1e-6,
@@ -32,19 +32,20 @@
         "Attention Dropout": 0.4,
         "Memory Report": false,
 	"Loss Function": "bcelogits",
-	"Network Weights": ["/zhome/94/2/142348/PathogenFinder_dev/test/test1/weights_model.pickle", 
-				"/zhome/94/2/142348/PathogenFinder_dev/test/test1/weights_model.pickle",
-				"/zhome/94/2/142348/PathogenFinder_dev/test/test1/weights_model.pickle"],
+	"Network Weights": ["/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model1.pickle",
+			"/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model2.pickle",
+			"/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model3.pickle",
+			"/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model4.pickle"],
 	"Data Parameters":{
 		"asynchronity": true,
 		"num_workers": 8,
 		"bucketing": false,
-		"stratified": true
+		"stratified": false
 		}
 	},
 "Test Parameters":{
 	"Sequence Format": "embeddings",
-        "Input Data": "/zhome/94/2/142348/PathogenFinder_dev/test/multiple_files.tsv",
-	"Label File": "/zhome/94/2/142348/PathogenFinder_dev/test/phenotypes_multi.tsv"
+        "Input Data": "/ceph/hpc/data/d2023d12-072-users/metadata/input_test.tsv",
+	"Label File": "/ceph/hpc/data/d2023d12-072-users/metadata/metadata_test.tsv"
 }               
 }

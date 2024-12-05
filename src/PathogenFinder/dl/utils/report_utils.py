@@ -18,8 +18,9 @@ class Inference_Report:
         for n in range(len(pathodf)):
             filepath = pathodf.loc[n, "File Name"]
             filename = Path(filepath).stem
-            protfeat = proteinfeats[filepath]
-            report[filename] = {"Predictions": pathodf.loc[n], "ProteinFeats": protfeat}
+      #      protfeat = proteinfeats[filepath]
+       #     report[filename] = {"Predictions": pathodf.loc[n], "ProteinFeats": protfeat}
+            report[filename] = {"Predictions": pathodf.loc[n]}
         return report
 
     def save_report(self, sample_report):
@@ -28,7 +29,7 @@ class Inference_Report:
             os.mkdir(folder_out_sample)
             pred_df = pd.DataFrame(val["Predictions"]).T
             pred_df.to_csv("{}/predictions.tsv".format(folder_out_sample), sep="\t", index=False)
-            val["ProteinFeats"].to_csv("{}/attentions.tsv".format(folder_out_sample), sep="\t", index=False)
+     #       val["ProteinFeats"].to_csv("{}/attentions.tsv".format(folder_out_sample), sep="\t", index=False)
 
     def pathopred_results(self, pathopred_ensemble):
         df = pathopred_ensemble[0]
@@ -59,10 +60,10 @@ class Inference_Report:
                     protfeat_dict[k] = protfeat_init
                 else:
                     protfeat_dict[k] = protfeat_dict[k].merge(protfeat_init, on="ProteinIDs")
-        for k, val in protfeat_dict.items():
-            val["Attentions_mean"] = val[pred_cols].mean(axis=1)
-            val["Attentions_std"] = val[pred_cols].std(axis=1)
-            val["Attentions_sum"] = val[pred_cols].sum(axis=1)
+ #       for k, val in protfeat_dict.items():
+  #          val["Attentions_mean"] = val[pred_cols].mean(axis=1)
+   #         val["Attentions_std"] = val[pred_cols].std(axis=1)
+    #        val["Attentions_sum"] = val[pred_cols].sum(axis=1)
         return protfeat_dict
 
 
