@@ -2,8 +2,12 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from tqdm import tqdm
+from pathlib import Path
+import os
 
 from utils.metrics_utils import Metrics
+from dl.utils.report_utils import Batch_Results
+
 
 class Network_Module:
 
@@ -199,25 +203,33 @@ class Network_Module:
 
         return loss_pass, mcc_pass
 
-    def predictive_pass(self, val_loader, batch_size, asynchronity=False):
+    def predictive_pass(self, val_loader, batch_size, asynchronity=False,
+                            record_attentions=True, record_embeddings=True):
 
         self.network.eval()
+
+        if record_embeddings:
+        
+            activation = {}
+            def getActivation(name):
+                # the hook signature
+                def hook(model, input, output):
+                    activation[name] = output.detach()
+                return hook
+            joinlength_hook = self.network.classifier.norm_layer.register_forward_hook(getActivation('norm_layer'))
+            postattention_hook = self.network.hook_postatt.register_forward_hook(getActivation("hook_postatt"))
 
         loss_lst = []
 
         loss_pass = 0.
         count = 0
         len_dataloader = len(val_loader)
- #       pred_tensor = torch.empty((len_dataloader*batch_size, self.network.num_classes), device="cpu")
-        pred_lst = []
-        file_tensor = []
-        protID_tensor = []
-        att_tensor = []
-        lengths_tensor = []
-        batch_n = 0
 
+        batch_n = 0
+        batches_results = []
         with torch.inference_mode():
             for batch in tqdm(val_loader):
+                
                 pos_first, pos_last = count, count+batch_size
                 if self.memory_profiler:
                     self.memory_profiler.step()
@@ -225,7 +237,7 @@ class Network_Module:
                 protein_ids = batch["Protein_IDs"]
                 embeddings = batch["Input"]
                 lengths = batch["Protein Count"]
-                lengths_tensor.extend(lengths)
+
                 #  sending data to device
                 embeddings = embeddings.to(self.device, non_blocking=asynchronity)
                 lengths = lengths.to(self.device, non_blocking=asynchronity)
@@ -235,18 +247,27 @@ class Network_Module:
                     predictions = torch.sigmoid(predictions_logit)
 
                 pred_c = predictions.detach().cpu()
-#                pred_tensor[pos_first:pos_last,:] = pred_c
-                pred_lst.extend(pred_c)
-                file_tensor.extend(file_names)
-                protID_tensor.append(protein_ids)
+                if record_attentions:
+                    attentions = attentions.detach().cpu()
+                else:
+                    attentions = None
+                if record_embeddings:
+                    embeddings1 = activation['norm_layer'].detach().cpu().unsqueeze(1)
+                    embeddings2 = activation['hook_postatt'].detach().cpu().unsqueeze(1)
+                else:
+                    embeddings1 = None
+                    embeddings2 = None
 
-                attentions = attentions.detach().cpu()
-                att_tensor.append(attentions)
+                batch_results = Batch_Results(filenames=file_names, predictions=pred_c,
+                                    protIDs=protein_ids, proteome_lengths=lengths.detach().cpu(),
+                                    attentions=attentions.detach().cpu(), embeddings1=embeddings1,
+                                    embeddings2=embeddings2)
+                batches_results.append(batch_results)
 
                 batch_n += 1
                 count += batch_size
-        pred_tensor = torch.Tensor(pred_lst)
-        return pred_tensor, file_tensor, protID_tensor, att_tensor, lengths_tensor
+        postattention_hook.remove()
+        return batches_results
 
     @staticmethod
     def set_sensible_batch_size(batch_size, min_batch_size=8, max_batch_size=45):
@@ -282,3 +303,4 @@ class Network_Module:
             return "cuda"
         else:
             return "cpu"
+

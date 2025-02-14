@@ -41,10 +41,11 @@ class ConfigurationPF2:
         elif mode == "Inference":
             self.inference_parameters = self.init_params(param_group="Inference Parameters",
                                     list_params=["Preprocessing Parameters", "Sequence Format", "Input Data",
-                                                    "Input Location", "Multiple Files", "Input Metadata"])
+                                                    "Input Location", "Multiple Files", "Input Metadata",
+                                                    "Produce Attentions", "Produce Embeddings"])
         elif mode == "Test":
             self.test_parameters = self.init_params(param_group="Test Parameters",
-                                    list_params=["Input Data", "Label File", "Sequence Format"])
+                                    list_params=["Input Data", "Label File", "Sequence Format", "Produce Attentions", "Produce Embeddings"])
         elif mode == "Hyperparam_Opt":
             self.hyperopt_parameters = self.init_params(parm_group="Hyperparam_Opt Parameters",
                                     list_params=["Optimizing Parameters", "Name Study", "Group",

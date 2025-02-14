@@ -80,7 +80,7 @@ class ConvNext_AddAtt_Net(nn.Module):
                                                         dropout=dropout_att,
                                                         residual_attention=residual_attention,
                                                         stochastic_depth_prob=att_sd, layer_scale=layer_scale)
-        self.hook_postatt = nn.Identity()
+
         if self.residual_attention: 
             self.stochastic_depth_att = False
         else:
@@ -167,7 +167,6 @@ class ConvNext_AddAtt_Net(nn.Module):
             x = layer(x)
             x = x.masked_fill(mask, 0)
         x, attentions = self.attention_layer(x, mask, lengths)
-        x = self.hook_postatt(x)
         if self.stochastic_depth_att and not self.residual_attention:
             x = self.stochastic_depth_att(x)
         x = torch.squeeze(x,dim=-1)

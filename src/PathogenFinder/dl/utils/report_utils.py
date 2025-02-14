@@ -4,6 +4,62 @@ import torch
 import os
 import pandas as pd
 from pathlib import Path
+import numpy as np
+
+
+class Batch_Results:
+
+    def __init__(self, filenames, predictions, protIDs, proteome_lengths, attentions=None, embeddings1=None,
+            embeddings2=None):
+
+        self.filenames = filenames
+        self.predictions = predictions
+        self.protIDs = protIDs
+        self.attentions = attentions
+        self.embeddings1 = embeddings1
+        self.embeddings2 = embeddings2
+        self.proteome_lengths = proteome_lengths
+
+        assert len(self.filenames) == len(self.predictions)
+        assert len(self.predictions) == len(self.protIDs)
+        assert len(self.protIDs) == len(self.proteome_lengths)
+
+        if attentions is not None:
+            assert len(self.attentions) == len(self.proteome_lengths)
+        if embeddings1 is not None:
+            assert len(self.embeddings1) == len(self.proteome_lengths)
+        if embeddings2 is not None:
+            assert len(self.embeddings2) == len(self.proteome_lengths)
+
+    def __len__(self):
+        return len(self.filenames)
+
+    def get_samples(self):
+        samples = {}
+        for n in range(len(self)):
+#            name = Path(self.filenames[n]).stem
+            name = self.filenames[n]
+            samples[name] = {}
+            samples[name]["Features"] = {}
+            samples[name]["Features"]["Filename"] = [self.filenames[n]]
+            samples[name]["Features"]["ProtIDs"] = self.protIDs[n][:int(self.proteome_lengths[n][0])]
+            samples[name]["Output"] = {}
+            samples[name]["Output"]["Prediction"] = self.predictions[n].tolist()
+            samples[name]["Features"]["Proteome Length"] = self.proteome_lengths[n][0]
+            if self.attentions is None:
+                samples[name]["Output"]["Attention"] = [None]
+            else:
+                samples[name]["Output"]["Attention"] = self.attentions[n][:,:int(self.proteome_lengths[n][0])].numpy()
+            if self.embeddings1 is None:
+                samples[name]["Output"]["Embeddings1"] = [None]
+            else:
+                samples[name]["Output"]["Embeddings1"] = self.embeddings1[n].numpy()
+            if self.embeddings2 is None:
+                samples[name]["Output"]["Embeddings2"] = [None]
+            else:
+                samples[name]["Output"]["Embeddings2"] = self.embeddings2[n].numpy()
+        return samples
+
 
 class Inference_Report:
 
@@ -11,60 +67,37 @@ class Inference_Report:
 
         self.out_folder = out_folder
 
-    def reports_sample(self, pathopred_ensemble, prot_feat_ensemble, embedding_maps_ensemble):
-        pathodf = self.pathopred_results(pathopred_ensemble)
-        proteinfeats = self.proteinfeat_results(prot_feat_ensemble)
-        report = {}
-        for n in range(len(pathodf)):
-            filepath = pathodf.loc[n, "File Name"]
-            filename = Path(filepath).stem
-      #      protfeat = proteinfeats[filepath]
-       #     report[filename] = {"Predictions": pathodf.loc[n], "ProteinFeats": protfeat}
-            report[filename] = {"Predictions": pathodf.loc[n]}
-        return report
+    @staticmethod
+    def get_predictions(ensemble_results):
+        list_predictions = []
+        for name, val in ensemble_results.items():
+            predictionPF = pd.Series(val["Output"]["Prediction"], index=["Prediction_0", "Prediction_1", "Prediction_2", "Prediction_3"])
+            predictionPF["Name"] = name
+            predictionPF["Prediction Mean"] = np.mean(val["Output"]["Prediction"])
+            predictionPF["Prediction STD"] = np.std(val["Output"]["Prediction"])
+            if predictionPF["Prediction Mean"] > 0.5:
+                predictionPF["Binary Prediction Mean"] = 1
+                predictionPF["Phenotype Mean"] = "Human Pathogenic"
+            else:
+                predictionPF["Phenotype Mean"] = "Human Non Pathogenic"
+                predictionPF["Binary Prediction Mean"] = 0
+            ensemble_results[name]["Ensemble Predictions"] = predictionPF
+        return ensemble_results
 
-    def save_report(self, sample_report):
-        for k, val in sample_report.items():
-            folder_out_sample = "{}/{}".format(self.out_folder, k)
+    def save_report(self, results_ensemble, save_attentions=True, save_embeddings=True):
+        for name, val in results_ensemble.items():
+            folder_out_sample = "{}/{}".format(self.out_folder, val["Features"]["Filename"])
             os.mkdir(folder_out_sample)
-            pred_df = pd.DataFrame(val["Predictions"]).T
-            pred_df.to_csv("{}/predictions.tsv".format(folder_out_sample), sep="\t", index=False)
-     #       val["ProteinFeats"].to_csv("{}/attentions.tsv".format(folder_out_sample), sep="\t", index=False)
+            val["Ensemble Predictions"].to_frame().to_csv("{}/predictions.tsv".format(folder_out_sample), sep="\t", index=False)
+            if save_attentions:
+                np.savez_compressed("{}/attentions.npz".format(folder_out_sample),
+                                    protIDs=val["Features"]["ProtIDs"],
+                                    attentions=val["Output"]["Attention"])
+            if save_embeddings:
+                np.savez_compressed("{}/embeddings.npz".format(folder_out_sample),
+                                    embeddings_1=val["Output"]["Embeddings1"],
+                                    embeddings_2=val["Output"]["Embeddings2"])
 
-    def pathopred_results(self, pathopred_ensemble):
-        df = pathopred_ensemble[0]
-        df = df.rename(columns={c: c+'_0' for c in df.columns if c not in ["File Name"]})
-        pred_cols = ["Prediction_0"]
-        count = 1
-        for d in pathopred_ensemble[1:]:
-            d_suff = d.rename(columns={c: c+'_{}'.format(count) for c in d.columns if c not in ["File Name"]})
-            df = df.merge(d_suff, on='File Name')
-            pred_cols.append("Prediction_{}".format(count))
-            count += 1
-        df["Prediction_mean"] = df[pred_cols].mean(axis=1)
-        df["Prediction_std"] = df[pred_cols].std(axis=1)
-        df["Binary Prediction_mean"] = 0
-        df.loc[df["Prediction_mean"]>0.5, "Binary Prediction_mean"] = 1
-        df["Phenotype_mean"] = "Human Non Pathogenic"
-        df.loc[df["Prediction_mean"]>0.5, "Phenotype_mean"] = "Human Pathogenic"
-        return df
-        
-    def proteinfeat_results(self, prot_feat_ensemble):
-        protfeat_dict = {}
-        pred_cols = []
-        for n in range(len(prot_feat_ensemble)):
-            pred_cols.append("Attentions_{}".format(n))
-            for k, val in prot_feat_ensemble[n].items():
-                protfeat_init = val.rename(columns={c: c+'_{}'.format(n) for c in val.columns if c not in ["ProteinIDs"]})
-                if k not in protfeat_dict:
-                    protfeat_dict[k] = protfeat_init
-                else:
-                    protfeat_dict[k] = protfeat_dict[k].merge(protfeat_init, on="ProteinIDs")
- #       for k, val in protfeat_dict.items():
-  #          val["Attentions_mean"] = val[pred_cols].mean(axis=1)
-   #         val["Attentions_std"] = val[pred_cols].std(axis=1)
-    #        val["Attentions_sum"] = val[pred_cols].sum(axis=1)
-        return protfeat_dict
 
 
     def embeddingmap_results(self, embedding_maps_ensemble):

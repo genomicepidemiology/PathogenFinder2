@@ -62,13 +62,11 @@ class PathogenFinder2:
         self.model_parameters = model_parameters
 
 
-    def predict_proteincontent(self, input_seq, preprocess_folder, prodigal_path="pyrodigal"):
+    def predict_proteincontent(self, input_seq, log_folder, out_folder, prodigal_path="pyrodigal"):
         # Set up folder
         print("Using device: {}".format("cpu"))
-        log_folder = "{}/prodigal_log_files".format(preprocess_folder)
-        os.mkdir(log_folder)
 
-        prodigal_exec = Prodigal_EXEC(log_folder=log_folder, output_folder=preprocess_folder,
+        prodigal_exec = Prodigal_EXEC(log_folder=log_folder, output_folder=out_folder,
                                 prodigal_path=prodigal_path)
         protein_file = prodigal_exec(input_seq)
         return protein_file
@@ -109,17 +107,26 @@ class PathogenFinder2:
 
     def inference(self, inference_parameters):
         input_metadata = self.make_input(inference_parameters=inference_parameters)
+
         preprocess_folder = "{}/preprocessdata".format(self.output_folder)
         os.mkdir(preprocess_folder)
-        
+        if inference_parameters["Sequence Format"] == "genome" or inference_parameters["Sequence Format"] == "proteome":
+            embedding_folder = "{}/embedding_files".format(preprocess_folder)
+            os.mkdir(embedding_folder)
+            if inference_parameters["Sequence Format"] == "genome":
+                proteome_folder = "{}/proteome_files".format(preprocess_folder)
+                os.mkdir(proteome_folder)
+                prod_log_folder = "{}/prodigal_log_files".format(preprocess_folder)
+                os.mkdir(prod_log_folder)
+            
         for n in range(len(input_metadata)):
-            print("================== Infering {} file =====================".format(input_metadata.loc[n, "Input Files"]))
-#            input_metadata[n, "File_Genome"] = os.path.abspath(input_metadata.loc[n, "Input Files"])        
-
+            print("================== Infering {} ({}) file =====================".format(n, input_metadata.loc[n, "Input Files"]))
             if inference_parameters["Sequence Format"] == "genome":
                 print("Predicting the protein content.")
+                input_metadata.loc[n, "File_Genome"] = input_metadata.loc[n,"Input Files"]
                 input_metadata.loc[n, "File_Proteins"] = self.predict_proteincontent(
-                                                    input_seq=input_metadata.loc[n, "File_Genome"], preprocess_folder=preprocess_folder)
+                                                    input_seq=input_metadata.loc[n, "File_Genome"], out_folder=proteome_folder,
+                                                    log_folder=prod_log_folder)
             else:
                 input_metadata.loc[n, "File_Genome"] = None
                 input_metadata.loc[n, "File_Proteins"] = input_metadata.loc[n,"Input Files"]
@@ -127,7 +134,7 @@ class PathogenFinder2:
             if inference_parameters["Sequence Format"] == "genome" or inference_parameters["Sequence Format"] == "proteome":
                 print("Predicting the embeddings of the protein content")
                 input_metadata.loc[n, "File_Embedding"] = self.inference_embeddings(
-                                                    embed_out=preprocess_folder, input_seq=input_metadata.loc[n, "File_Proteins"])
+                                                    embed_out=embedding_folder, input_seq=input_metadata.loc[n, "File_Proteins"])
             else:
                 input_metadata.loc[n, "File_Proteins"] = None
                 input_metadata.loc[n, "File_Embedding"] = input_metadata.loc[n, "Input Files"]

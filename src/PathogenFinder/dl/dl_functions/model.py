@@ -2,6 +2,8 @@ import random
 import torch
 import numpy as np
 import pandas as pd
+import os
+from collections import defaultdict
 
 from dl.dl_functions.train_model import Train_NeuralNetwork
 from dl.dl_functions.inference_model import Inference_NeuralNetwork
@@ -142,6 +144,7 @@ class Pathogen_DLModel:
         test_instance = Test_NeuralNetwork(out_folder=self.misc_parameters["Results Folder"])
 
         results_df = test_instance.create_results(label_df=label_df, predicted_data=predicted_data)
+
         measures = test_instance.calculate_measures(results_df=results_df)
         cm_display, roc_display, curve_cal = test_instance.graph_objects(results_df=results_df)
         test_instance.save_results(measures=measures, cm_display=cm_display, roc_display=roc_display, curve_cal=curve_cal)
@@ -152,8 +155,9 @@ class Pathogen_DLModel:
         pathopred_ensemble = []
         protein_features_ensemble = []
         embedding_maps_ensemble = []
-
-        for network_weights in self.model_parameters["Network Weights"]:
+        ensemble_results = False
+        input_metadata = pd.read_csv(inference_parameters["Input Metadata"], sep="\t")
+        for ens in range(len(self.model_parameters["Network Weights"])):
             network_module = Network_Module(model_type=self.model_type,
                                         out_folder=self.misc_parameters["Results Folder"],
                                         model_parameters=self.model_parameters,
@@ -168,22 +172,43 @@ class Pathogen_DLModel:
 
             inference_instance = Inference_NeuralNetwork(network_module=network_module,
                                                     model_report=self.reportNN,
-                                                    model_weights=network_weights,
+                                                    model_weights=self.model_parameters["Network Weights"][ens],
                                                     out_folder=self.misc_parameters["Results Folder"])
             inference_instance.set_dataloader(inference_dataset=inference_df,
                                         num_workers=self.model_parameters["Data Parameters"]["num_workers"],
                                         asynchronity=self.model_parameters["Data Parameters"]["asynchronity"])
 
-            pathopred, protein_features, embedding_map = inference_instance()
-            pathopred_ensemble.append(pathopred)
-            protein_features_ensemble.append(protein_features)
-            embedding_maps_ensemble.append(embedding_map)
+            results_inference = inference_instance(return_attentions=inference_parameters["Produce Attentions"],
+                                                    return_embeddings=inference_parameters["Produce Embeddings"])
+            
+            if not ensemble_results:
+                ensemble_results = {}
+                for i, j in results_inference.items():
+                    name = input_metadata.loc[input_metadata["File_Embedding"]==i, "Input Files"].values[0]
+                    ensemble_results[name] = {"Output":{}, "Features":{}}
+                    ensemble_results[name]["Features"]["Filepath"] = j["Features"]["Filename"]
+                    ensemble_results[name]["Features"]["Proteome Length"] = j["Features"]["Proteome Length"]
+                    ensemble_results[name]["Features"]["ProtIDs"] = j["Features"]["ProtIDs"]
+                    ensemble_results[name]["Features"]["Filename"] = os.path.basename(name)
+                    for io, jo in j["Output"].items():
+                        ensemble_results[name]["Output"][io] = jo
+            else:
+                for i, j in results_inference.items():
+                    name = input_metadata.loc[input_metadata["File_Embedding"]==i, "Input Files"].values[0]
+                    for io, jo in j["Output"].items():
+                        if io == "Prediction":
+                            ensemble_results[name]["Output"][io].extend(jo)
+                        else:
+                            ensemble_results[name]["Output"][io] = np.concatenate((ensemble_results[name]["Output"][io], jo))
+                    assert j["Features"]["Filename"] == ensemble_results[name]["Features"]["Filepath"]
+                    assert j["Features"]["Proteome Length"] == ensemble_results[name]["Features"]["Proteome Length"]
 
         results_module = Inference_Report(out_folder=self.misc_parameters["Results Folder"])
-        sample_report = results_module.reports_sample(pathopred_ensemble=pathopred_ensemble, prot_feat_ensemble=protein_features_ensemble,
-                                    embedding_maps_ensemble=embedding_maps_ensemble)
-        results_module.save_report(sample_report=sample_report)
-        return sample_report
+        ensemble_results = Inference_Report.get_predictions(ensemble_results=ensemble_results)
+        results_module.save_report(results_ensemble=ensemble_results,
+                                    save_attentions=inference_parameters["Produce Attentions"],
+                                    save_embeddings=inference_parameters["Produce Embeddings"])
+        return ensemble_results
 
 
 
