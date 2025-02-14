@@ -5,12 +5,12 @@ import pandas as pd
 import os
 from collections import defaultdict
 
-from dl.dl_functions.train_model import Train_NeuralNetwork
-from dl.dl_functions.inference_model import Inference_NeuralNetwork
-from dl.dl_functions.test_model import Test_NeuralNetwork
-from dl.utils.nn_utils import Network_Module
-from dl.utils.data_utils import NN_Data
-from dl.utils.report_utils import ReportNN, Memory_Report, Inference_Report
+from .train_model import Train_NeuralNetwork
+from .inference_model import Inference_NeuralNetwork
+from .test_model import Test_NeuralNetwork
+from ..utils.nn_utils import Network_Module
+from ..utils.data_utils import NN_Data
+from ..utils.report_utils import ReportNN, Memory_Report, Inference_Report
 
 
 

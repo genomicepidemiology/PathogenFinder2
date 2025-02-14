@@ -5,12 +5,12 @@ import pandas as pd
 import torch
 
 
-from preprocessdata.prott5_embedder import ProtT5_Embedder
-from preprocessdata.extract_proteins import Prodigal_EXEC
-from utils.file_utils import get_filename
-from utils.configuration_module import ConfigurationPF2
-from dl.dl_functions.model import Pathogen_DLModel
-from dl.utils.data_utils import NN_Data
+from .preprocessdata.prott5_embedder import ProtT5_Embedder
+from .preprocessdata.extract_proteins import Prodigal_EXEC
+from .utils.file_utils import get_filename
+from .utils.configuration_module import ConfigurationPF2
+from .dl.dl_functions.model import Pathogen_DLModel
+from .dl.utils.data_utils import NN_Data
 
 
 
@@ -161,7 +161,8 @@ class PathogenFinder2:
 
 
 
-def main(args):
+def main():
+    args = cl_arguments()
     ## Set Parameters ##
     pf2_config = ConfigurationPF2(mode=args.action)
     pf2_config.load_json_params(json_file=args.config)
@@ -182,6 +183,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    args = cl_arguments()
+#    args = cl_arguments()
     main(args)
 

@@ -2,4 +2,4 @@
 __version__ = "0.4.0"
 
 #Import packages
-import pathogenfinder2
+#import pathogenfinder2

@@ -5,8 +5,8 @@ from tqdm import tqdm
 from pathlib import Path
 import os
 
-from utils.metrics_utils import Metrics
-from dl.utils.report_utils import Batch_Results
+from ...utils.metrics_utils import Metrics
+from ..utils.report_utils import Batch_Results
 
 
 class Network_Module:

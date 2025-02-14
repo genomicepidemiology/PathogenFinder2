@@ -1,9 +1,9 @@
 import torch
 import time
 
-from dl.utils.optimizer_utils import Optimizer
-from dl.utils.data_utils import NN_Data
-from dl.utils.nn_utils import Network_Module
+from ..utils.optimizer_utils import Optimizer
+from ..utils.data_utils import NN_Data
+from ..utils.nn_utils import Network_Module
 
 
 

@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
 import subprocess
-from utils.file_utils import get_filename
+#from .utils.file_utils import get_filename
+from ..utils.file_utils import get_filename
+
 
 class Prodigal_EXEC:
 

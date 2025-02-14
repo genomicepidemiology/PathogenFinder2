@@ -1,8 +1,8 @@
 import pandas as pd
 import torch
 
-from dl.utils.data_utils import NN_Data
-from dl.utils.nn_utils import Network_Module
+from ..utils.data_utils import NN_Data
+from ..utils.nn_utils import Network_Module
 
 class Inference_NeuralNetwork:
 

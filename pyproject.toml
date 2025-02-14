@@ -5,7 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "PathogenFinder2"
 version = "0.4.0"
-dependencies = []
+dependencies = ["pandas >= 2.2.2",
+		"torch >= 2.3.1",
+		"tqdm", "h5py",
+		"transformers", "pytorch_warmup",
+		"torchvision", "torchmetrics", "wandb",
+		"matplotlib", "scikit-learn"]
 requires-python = ">= 3.9"
 authors = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"},]
 maintainers = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"}]
@@ -35,7 +40,7 @@ Issues = "https://github.com/genomicepidemiology/PathogenFinder/issues"
 Changelog = "https://github.com/genomicepidemiology/PathogenFinder/blob/master/CHANGELOG.md"
 
 [project.scripts]
-#Fill
+pathogenfinder2 = "PathogenFinder.pathogenfinder2:main"
 
 [tool.setuptools]
 #Fille

@@ -7,7 +7,7 @@ import argparse
 import types
 from collections import UserDict
 
-from utils.configuration_utils import NNEncoder, ParamsModel
+from .configuration_utils import NNEncoder, ParamsModel
 
 
 class ConfigurationPF2:
