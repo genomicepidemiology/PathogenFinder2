@@ -1,10 +1,10 @@
 import sys
 import os
 import json
-from torch import nn
-import torch
+
 import argparse
 import types
+from pathlib import Path
 from collections import UserDict
 
 from .configuration_utils import NNEncoder, ParamsModel
@@ -12,24 +12,38 @@ from .configuration_utils import NNEncoder, ParamsModel
 
 class ConfigurationPF2:
 
-    def __init__(self, mode):
+    def __init__(self, mode, user_config=False):
 
         self.mode = mode
 
-        self.misc_parameters = self.init_params(param_group="Misc Parameters",
+        if user_config:
+
+            self.misc_parameters = self.init_params(param_group="Misc Parameters",
                                     list_params=["Notes", "Name", "Actions", "Report Results", "Project Name", "Results Folder"])
-        self.model_parameters = self.init_params(param_group="Model Parameters",
+            self.model_parameters = self.init_params(param_group="Model Parameters",
                                     list_params=["Model Name", "Input Dimensions", "Network Structure",
                                             "Out Dimensions", "Norm Scale", "Norm Type", "Data Parameters", "Attention Norm",
                                             "Mixed Precision", "Stochastic Depth Prob", "Sequence Dropout", "Attention Dropout",
                                             "Model Weights", "Batch Size", "Seed", "Stochastic Depth Prob Att", "Memory Report",
                                             "Loss Function", "Network Weights"])
-        self.train_parameters = None
-        self.test_parameters = None
-        self.inference_parameters = None
-        self.hyperopt_parameters = None
+            self.train_parameters = None
+            self.test_parameters = None
+            self.inference_parameters = None
+            self.hyperopt_parameters = None
 
-        self.set_mode_parameters(mode=self.mode)
+            self.set_mode_parameters(mode=self.mode)
+        else:
+            std_json_path = "{}/../../../data/configs/config_empty.json".format(Path(__file__).absolute())
+            with open(std_json_path, "r") as stdjson:
+                std_json = json.load(stdjson)
+            self.misc_parameters = std_json["Misc Parameters"]
+            self.model_parameters = std_json["Model Parameters"]
+
+            self.inference_parameters = std_json["Inference Parameters"]
+            self.train_parameters = std_json["Train Parameters"]
+            self.test_parameters = std_json["Test Parameters"]
+            self.hyperopt_parameters = std_json["Hyperparam_Opt Parameters"]
+
 
 
     def set_mode_parameters(self, mode):
@@ -88,8 +102,10 @@ class ConfigurationPF2:
     def __str__(self):
         final_dict = self.collect_params()
         return str(final_dict)
-    
+        
     def load_args_params(self, args):
+        print(self.misc_parameters)
+        exit()
         if args.outputFolder is not None:
             self.misc_parameters.set_param(param="Results Folder", value=args.outputFolder)
 
@@ -106,6 +122,6 @@ class ConfigurationPF2:
         final_dict = self.collect_params()
         file_save = "{}/config_run.json".format(self.misc_parameters["Results Folder"])
         with open(file_save, 'w') as f:
-            json.dump(data_save, f, cls=NNEncoder)
+            json.dump(final_dict, f, cls=NNEncoder)
 
 

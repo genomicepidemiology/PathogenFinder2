@@ -11,6 +11,7 @@ from .utils.file_utils import get_filename
 from .utils.configuration_module import ConfigurationPF2
 from .dl.dl_functions.model import Pathogen_DLModel
 from .dl.utils.data_utils import NN_Data
+from .dl.utils.report_utils import CGEResults
 
 
 
@@ -22,8 +23,10 @@ def cl_arguments():
     parent_parser = argparse.ArgumentParser(add_help=False)
 
     parent_parser.add_argument("-c", "--config", help="Json file with the configuration for PathogenFinder2 model.",
-                                required=True)  # ToDO: Not require, add a standard json in case of default=None
-    parent_parser.add_argument("-o", "--outputFolder", help="Folder where to output the results", default=None)
+                                default=False)  # ToDO: Not require, add a standard json in case of default=None
+    parent_parser.add_argument("-o", "--outputFolder", help="Folder where to output the results")
+
+    parent_parser.add_argument("--cge", help="Output the cge format output", action="store_true")
     exec_paths = parent_parser.add_argument_group('Paths to executables',
                                     description="Paths to executables. They might not be necessary.")
     exec_paths.add_argument("--prodigalPath", help="Path to Prodigal", default="prodigal")
@@ -43,6 +46,9 @@ def cl_arguments():
     inference_parser.add_argument("-w", "--weightsModel", help="Weights used by the deep learning model to predict")
     inference_parser.add_argument("-f", "--formatSeq", help="The format of the input data.",
                                     choices=["genome", "proteome", "embeddings"])
+    inference_parser.add_argument("--multiFiles", help="If the input data are multiple files", action="store_true")    
+    inference_parser.add_argument("--prodEmbeddings", help="Report the embeddings", action="store_true")    
+    inference_parser.add_argument("--prodAttentions", help="Report the attention scores", action="store_true")    
 
 
     hyperopt_parser = subparsers.add_parser("hyperparam_opt",
@@ -105,7 +111,7 @@ class PathogenFinder2:
         return metadata
 
 
-    def inference(self, inference_parameters):
+    def inference(self, inference_parameters, cge_output=False):
         input_metadata = self.make_input(inference_parameters=inference_parameters)
 
         preprocess_folder = "{}/preprocessdata".format(self.output_folder)
@@ -146,6 +152,13 @@ class PathogenFinder2:
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         print("Using device: {}".format(device))
         predicted_data = self.model.predict_model(inference_parameters=inference_parameters)
+
+        if cge_output:
+            for k, val in predicted_data:
+                json_cge = CGEResults()
+                json_cge.add_software_result()
+                json_cge.add_phenotype_result(results_ensemble=val["Ensemble Predictions"])
+                json_cge.save_result(output_path="{}/{}".format(self.output_folder, val["Features"]["Filename"]))
         return predicted_data
 
     def train(self, train_parameters):
@@ -164,9 +177,11 @@ class PathogenFinder2:
 def main():
     args = cl_arguments()
     ## Set Parameters ##
-    pf2_config = ConfigurationPF2(mode=args.action)
-    pf2_config.load_json_params(json_file=args.config)
-    pf2_config.load_args_params(args=args)
+    pf2_config = ConfigurationPF2(mode=args.action, user_config=args.config)
+    if args.config:
+        pf2_config.load_json_params(json_file=args.config)
+    else:
+        pf2_config.load_args_params(args=args)
 
     pathogenfinder = PathogenFinder2(model_parameters=pf2_config.model_parameters,
                                     misc_parameters=pf2_config.misc_parameters)
@@ -175,9 +190,10 @@ def main():
     elif args.action == "Test":
         pathogenfinder.test(test_parameters=pf2_config.test_parameters)
     elif args.action == "Hyperparam_opt":
-        pathogenfider.hyperparam_opt()
+        pathogenfinder.hyperparam_opt()
     elif args.action == "Inference":
-        pathogenfinder.inference(inference_parameters=pf2_config.inference_parameters)
+        pathogenfinder.inference(inference_parameters=pf2_config.inference_parameters,
+                                 cge_output=args.cge)
     else:
         raise ValueError("No valid option for using pathogenfinder was selected")
 

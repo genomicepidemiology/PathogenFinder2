@@ -2,6 +2,7 @@ import pickle
 import wandb
 import torch
 import os
+import json
 import pandas as pd
 from pathlib import Path
 import numpy as np
@@ -104,9 +105,40 @@ class Inference_Report:
         pass
 
 
+class CGEResults:
 
+    def __init__(self):
 
+        self.software_result = dict()
+        self.phenotype_result = dict()
 
+    def add_software_result(self):
+        # TODO UPDATE AUTOMATIC
+        self.software_result["type"] = "software_result"
+        self.software_result["software_name"] = "PathogenFinder-2.0.0"
+        self.software_result["software_version"] = "2.0.0"
+        self.software_result["software_branch"] = "dev"
+        self.software_result["software_commit"] = ""
+        self.software_result["run_date"] = ""
+        
+    def add_phenotype_result(self, results_ensemble):
+        self.phenotype_result["type"] = "phenotype_ml"
+        self.phenotype_result["key"] = "Human Bacterial Pathogenicity"
+        self.phenotype_result["category"] = "Pathogenicity"
+        self.phenotype_result["ensemble_pred"] = True
+        self.phenotype_result["type_pred"] = "Categorical"
+        self.phenotype_result["prediction"] = results_ensemble["Phenotype Mean"]
+        self.phenotype_result["output_model"] = {}
+        for n in ["0", "1", "2", "3"]:
+            self.phenotype_result["Prediction_{}".format(n)] = results_ensemble["Prediction_{}".format(n)]
+        self.phenotype_result["output_std"] = results_ensemble["Prediction STD"]
+
+    def save_results(self, output_path):
+        results = {"software_result": self.software_result,
+                   "phenotype_ml": self.phenotype_result
+                   }
+        with open("{}/cge_output.json".format(output_path), 'w') as f:
+            json.dump(results, f)
 
 
 class Memory_Report:
