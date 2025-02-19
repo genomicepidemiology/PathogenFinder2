@@ -1,0 +1,23 @@
+FROM python:3.10-slim-bullseye
+
+ENV INSIDE_DOCKER true
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update -qq; \
+    apt-get install --no-install-recommends -y -qq git \
+    build-essential
+
+ENV PATHOGENFINDER_VERSION 2.0.0
+
+# Setup environment
+RUN cd /; \
+    mkdir app;
+ADD ./src/CGE_app/CGE_callpf2.py .
+ADD . /app
+WORKDIR /app
+
+#ADD src/CGE_app/CGE_callpf2.py .
+RUN python -m pip install -e .[cge]
+
+# Execute program when running the container
+ENTRYPOINT ["python", "./src/CGE_app/CGE_callpf2.py"]

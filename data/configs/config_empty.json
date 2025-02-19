@@ -1,0 +1,51 @@
+{
+"Misc Parameters": {
+        "Notes": "This is a base config file",
+        "Name": "Inference_orig",
+        "Results Folder": "",
+        "Actions": ["inference"],
+        "Report Results": "file",
+        "Project Name": "PathogenFinder2"
+        },
+"Model Parameters":{
+        "Model Name": "ConvNext-AddAtt",
+        "Input Dimensions": 1024,
+        "Network Structure":{
+                "Stem Cell": true,
+                "Num Blocks":2,
+                "Block Dimensions": 128,
+                "Attention Dimensions": 64,
+                "FNN Dimensions": 0,
+                "Length Information":"concat1",
+                "Length Dimensions": 30,
+                "Residual Attention": false},
+        "Out Dimensions": 1,
+        "Batch Size": 20,
+        "Norm Scale": 1e-6,
+        "Norm Type": "Layer",
+        "Attention Norm": true,
+        "Mixed Precision": true,
+        "Stochastic Depth Prob": 0.3,
+        "Stochastic Depth Prob Att": false,
+        "Sequence Dropout": 0.3,
+        "Attention Dropout": 0.6,
+        "Memory Report": false,
+        "Loss Function": "bcelogits",
+        "Network Weights": [],
+        "Data Parameters":{
+                "asynchronity": true,
+                "num_workers": 1,
+                "bucketing": false,
+                "stratified": false
+                }
+        },
+"Inference Parameters":{
+        "Preprocessing Parameters":{},
+        "Produce Attentions": null,
+        "Produce Embeddings": null,
+        "Sequence Format": "",
+        "Input Data": "",
+        "Multiple Files": null
+}               
+}
+
