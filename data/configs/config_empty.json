@@ -1,14 +1,15 @@
 {
 "Misc Parameters": {
         "Notes": "This is a base config file",
-        "Name": "Inference_orig",
         "Results Folder": "",
+	"Name": "PathogenFinder2 Run",
         "Actions": ["inference"],
         "Report Results": "file",
         "Project Name": "PathogenFinder2"
         },
 "Model Parameters":{
         "Model Name": "ConvNext-AddAtt",
+	"Seed": null,
         "Input Dimensions": 1024,
         "Network Structure":{
                 "Stem Cell": true,

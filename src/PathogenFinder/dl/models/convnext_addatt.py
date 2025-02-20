@@ -1,13 +1,13 @@
 from torch import nn, Tensor
 import torch
-from dl.models.layers.convnextblock import CNBlock
+from .layers.convnextblock import CNBlock
 from functools import partial
-from dl.models.layers.utils import LayerNorm1d, Conv1dNormActivation, Permute
+from .layers.utils import LayerNorm1d, Conv1dNormActivation, Permute
 from typing import Union, Tuple
 from torchvision.ops.stochastic_depth import StochasticDepth
-from dl.models.layers.attention import Attention_Methods
-from dl.models.layers.classifier import Classifier
-import dl.models.layers.utils as utils
+from .layers.attention import Attention_Methods
+from .layers.classifier import Classifier
+from .layers import utils as utils
 
 
 

@@ -33,17 +33,22 @@ class ConfigurationPF2:
 
             self.set_mode_parameters(mode=self.mode)
         else:
-            std_json_path = "{}/../../../data/configs/config_empty.json".format(Path(__file__).absolute())
+            std_json_path = "{}/../../../data/configs/config_empty.json".format(Path(__file__).parent.absolute())
             with open(std_json_path, "r") as stdjson:
                 std_json = json.load(stdjson)
             self.misc_parameters = std_json["Misc Parameters"]
             self.model_parameters = std_json["Model Parameters"]
-
-            self.inference_parameters = std_json["Inference Parameters"]
-            self.train_parameters = std_json["Train Parameters"]
-            self.test_parameters = std_json["Test Parameters"]
-            self.hyperopt_parameters = std_json["Hyperparam_Opt Parameters"]
-
+            if mode == "Inference":
+                self.inference_parameters = std_json["Inference Parameters"]
+            elif mode == "Train":
+                self.train_parameters = std_json["Train Parameters"]
+            elif mode == "Test":
+                self.test_parameters = std_json["Test Parameters"]
+            elif mode == "Hyperparam_Opt":
+                self.hyperopt_parameters = std_json["Hyperparam_Opt Parameters"]
+            else:
+                raise ValueError("The mode {} is not available".format(mode))
+    
 
 
     def set_mode_parameters(self, mode):
@@ -104,10 +109,34 @@ class ConfigurationPF2:
         return str(final_dict)
         
     def load_args_params(self, args):
-        print(self.misc_parameters)
-        exit()
-        if args.outputFolder is not None:
-            self.misc_parameters.set_param(param="Results Folder", value=args.outputFolder)
+        if args.outputFolder:
+            self.misc_parameters["Results Folder"] = args.outputFolder
+        else:
+            raise ValueError("It is necessary to set an output folder with --outputFolder when not using a config file")
+        if args.inputData:
+            self.inference_parameters["Input Data"] = args.inputData
+        else:
+            raise ValueError("It is necessary to set the input file with --inputData when not using a config file")
+        if args.formatSeq:
+            self.inference_parameters["Sequence Format"] = args.formatSeq
+        else:
+            raise ValueError("It is necessary to set what type of sequence with --formatSeq when not using a config file")
+        self.inference_parameters["Multiple Files"] = args.multiFiles
+        self.inference_parameters["Produce Embeddings"] = args.prodEmbeddings
+        self.inference_parameters["Produce Attentions"] = args.prodAttentions
+
+        if args.weightsModel:
+            files_weights = []
+            for filew in args.formatSeq.split(","):
+                files_weights.append(filew.strip())
+            self.model_parameters["Network Weights"] = files_weights
+        else:
+            weights_path = "%s/../../../data/models_weights/weights_model{}.pickle" % Path(__file__).parent.absolute()
+            files_weights = [weights_path.format(1), weights_path.format(2), weights_path.format(3), weights_path.format(4)]
+            self.model_parameters["Network Weights"] = files_weights
+
+
+
 
     def collect_params(self):
         final_dict = {"Misc Parameters": self.misc_parameters,

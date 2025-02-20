@@ -72,7 +72,7 @@ class Pathogen_DLModel:
             from dl.models.convnext import ConvNext_Net
             return ConvNext_Net
         elif model_type == "ConvNext-AddAtt":
-            from dl.models.convnext_addatt import ConvNext_AddAtt_Net
+            from ..models.convnext_addatt import ConvNext_AddAtt_Net
             return ConvNext_AddAtt_Net
         else:
             raise ValueError(
