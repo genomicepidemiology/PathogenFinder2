@@ -260,13 +260,14 @@ class Network_Module:
 
                 batch_results = Batch_Results(filenames=file_names, predictions=pred_c,
                                     protIDs=protein_ids, proteome_lengths=lengths.detach().cpu(),
-                                    attentions=attentions.detach().cpu(), embeddings1=embeddings1,
+                                    attentions=attentions, embeddings1=embeddings1,
                                     embeddings2=embeddings2)
                 batches_results.append(batch_results)
 
                 batch_n += 1
                 count += batch_size
-        postattention_hook.remove()
+        if record_attentions:
+            postattention_hook.remove()
         return batches_results
 
     @staticmethod
