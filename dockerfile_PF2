@@ -5,7 +5,10 @@ ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update -qq; \
     apt-get install --no-install-recommends -y -qq git \
-    build-essential
+    build-essential \
+    prodigal \
+    ; \
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/*;
 
 ENV PATHOGENFINDER_VERSION 2.0.0
 
@@ -15,8 +18,11 @@ RUN cd /; \
     mkdir app;
 ADD .. /app
 WORKDIR /app
+RUN cd /; mkdir pathogenfinder2
+ADD .. /pathogenfinder2
+RUN cd /pathogenfinder2; pip install -e .[main]
 
-RUN pip install -e .[main]
+#RUN pip install -e .[main]
 
 # Execute program when running the container
 ENTRYPOINT ["pathogenfinder2"]

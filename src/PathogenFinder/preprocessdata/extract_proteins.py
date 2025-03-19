@@ -9,7 +9,7 @@ class Prodigal_EXEC:
 
     #TODO: Check if multiple sequence in one file also works
 
-    def __init__(self, log_folder, output_folder, prodigal_path="pyrodigal"): # Change this to prodigal
+    def __init__(self, log_folder, output_folder, prodigal_path="prodigal"): # Change this to prodigal
 
         self.prodigal_path = prodigal_path
         self.log_folder = log_folder

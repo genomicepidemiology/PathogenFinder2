@@ -68,7 +68,7 @@ class PathogenFinder2:
         self.model_parameters = model_parameters
 
 
-    def predict_proteincontent(self, input_seq, log_folder, out_folder, prodigal_path="pyrodigal"):
+    def predict_proteincontent(self, input_seq, log_folder, out_folder, prodigal_path="prodigal"):
         # Set up folder
         print("Using device: {}".format("cpu"))
 

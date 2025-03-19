@@ -1,0 +1,3 @@
+[submodule "PathogenFinder2_DB"]
+	path = PathogenFinder2_DB
+	url = git@github.com:genomicepidemiology/PathogenFinder2_DB.git

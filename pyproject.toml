@@ -6,7 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "PathogenFinder2"
 version = "0.4.0"
 dependencies = ["pandas >= 2.2.2",
-		"matplotlib", "scikit-learn"]
+		"matplotlib", "scikit-learn", "torch >= 2.3.1",
+	        "tqdm", "h5py","sentencepiece",
+	        "transformers", "pytorch_warmup",
+	        "torchvision", "torchmetrics", "wandb"]
 requires-python = ">= 3.9"
 authors = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"},]
 maintainers = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"}]
@@ -27,12 +30,7 @@ readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["deep learning", "epidemiology", "microbiology"]
 [project.optional-dependencies]
-main = ["torch >= 2.3.1",
-        "tqdm", "h5py",
-	"transformers", "pytorch_warmup",
-        "torchvision", "torchmetrics", "wandb"]
-cge = ["paramiko"]
-phenotype_extra = []
+phenotype_extra = ["umap-learn==0.5.4", "seaborn", "matplotlib"]
 [project.urls]
 Homepage = "https://example.com"
 Documentation = "https://readthedocs.org"
