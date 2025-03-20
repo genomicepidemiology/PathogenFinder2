@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PathogenFinder2"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = ["pandas >= 2.2.2",
 		"matplotlib", "scikit-learn", "torch >= 2.3.1",
 	        "tqdm", "h5py","sentencepiece",
 	        "transformers", "pytorch_warmup",
 	        "torchvision", "torchmetrics", "wandb"]
-requires-python = ">= 3.9"
+requires-python = ">= 3.10"
 authors = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"},]
 maintainers = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"}]
 description = "Find me some Pathogens!"
@@ -40,6 +40,7 @@ Changelog = "https://github.com/genomicepidemiology/PathogenFinder/blob/master/C
 
 [project.scripts]
 pathogenfinder2 = "PathogenFinder.pathogenfinder2:main"
+pathogenfinder2_phenotype = "ExtraPhenotype.pathogenfinder2_phenotype:main"
 
 [tool.setuptools]
 #Fille

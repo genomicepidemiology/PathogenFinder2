@@ -55,6 +55,7 @@ def cl_arguments():
                                     help="Hyperparam optimizaiton PathogenFinder2 model based on certain data and configuration.",
                                     parents=[parent_parser])
     hyperopt_parser.set_defaults(action="Hyperparam_Opt")
+
     return parser.parse_args()
 
 class PathogenFinder2:
@@ -173,7 +174,6 @@ class PathogenFinder2:
 
 
 
-
 def main():
     args = cl_arguments()
     ## Set Parameters ##
@@ -195,7 +195,7 @@ def main():
         pathogenfinder.inference(inference_parameters=pf2_config.inference_parameters,
                                  cge_output=args.cge)
     else:
-        raise ValueError("No valid option for using pathogenfinder was selected")
+        raise ValueError("No valid option ({}) for using pathogenfinder was selected".format(args.action)
 
 
 if __name__ == '__main__':
