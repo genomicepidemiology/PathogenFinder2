@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from pathlib import Path
 import os
+import logging
 
 from ...utils.metrics_utils import Metrics
 from ..utils.report_utils import Batch_Results
@@ -23,7 +24,7 @@ class Network_Module:
         self.network = network.to(self.device)
 
         self.mixed_precision = mixed_precision
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self.mixed_precision)
 
         self.results_module = results_module
         self.memory_profiler = memory_profiler
@@ -259,14 +260,14 @@ class Network_Module:
                     embeddings2 = None
 
                 batch_results = Batch_Results(filenames=file_names, predictions=pred_c,
-                                    protIDs=protein_ids, proteome_lengths=lengths.detach().cpu(),
-                                    attentions=attentions, embeddings1=embeddings1,
-                                    embeddings2=embeddings2)
+                                        protIDs=protein_ids, proteome_lengths=lengths.detach().cpu(),
+                                        attentions=attentions, embeddings1=embeddings1,
+                                        embeddings2=embeddings2)
                 batches_results.append(batch_results)
 
                 batch_n += 1
                 count += batch_size
-        if record_attentions:
+        if record_embeddings:
             postattention_hook.remove()
         return batches_results
 

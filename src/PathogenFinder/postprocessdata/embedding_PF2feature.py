@@ -18,7 +18,7 @@ class MapEmbeddings:
 
     def fitdata(self) -> (np.array, umap.umap_.UMAP):
         train_embed = self.data_embed["embedding"]
-        fit_model = umap.UMAP(random_state=42, n_neighbors=300, min_dist=0.5).fit(train_embed)
+        fit_model = umap.UMAP(random_state=42, n_neighbors=300, min_dist=0.5, n_jobs=1).fit(train_embed)
         train_umap = fit_model.transform(train_embed)
         return train_umap, fit_model
     
@@ -38,6 +38,7 @@ class MapEmbeddings:
         tax = self.data_embed['taxonomy_id'][indices].flatten()
         closer_df = pd.DataFrame({"Names": names, "Species": species, "Strain": strain, "RefSeq": refseq,
                                   "Taxonomy": tax, "Distances": distances.flatten()})
+        closer_df.to_csv("{}/closeneighbors_bpl.tsv".format(self.out_folder), sep="\t", index=False)
         closer_arr = np.squeeze(self.train_data[indices])
         return closer_df, closer_arr
 
@@ -76,7 +77,6 @@ def main():
     mapemb = MapEmbeddings(out_folder=args.out_folder, data_embed=args.embedding_train)
     test_transf = mapemb.fittestdata(testdata=args.embedding_test)
     closer_df, closer_arr = mapemb.knn(test_transf)
-    closer_df.to_csv("{}/closeneighbors_metadata.tsv".format(args.out_folder), sep="\t", index=False)
     mapemb.make_graph(test_data=test_transf, closer_data=closer_arr)
 
 if __name__ == "__main__":

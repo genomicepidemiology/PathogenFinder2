@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 import subprocess
-#from .utils.file_utils import get_filename
-from ..utils.file_utils import get_filename
+import logging
+from ..utils.os_utils import get_filename
 
 
 class Prodigal_EXEC:
@@ -17,7 +17,7 @@ class Prodigal_EXEC:
 
 
     def __call__(self, file_path):
-        print("Running Prodigal for file '{}'".format(file_path))
+        logging.info("Running Prodigal for file '{}'".format(file_path))
         abs_filepath = os.path.abspath(file_path)
         seq_name, ext = get_filename(abs_filepath)
         seq_folder = os.path.dirname(abs_filepath)
@@ -34,9 +34,10 @@ class Prodigal_EXEC:
                                 statsfold=self.output_folder,
                                 seqname=seq_name)
         if aminoacid:
-            command += " -a {aminofold}/{seqname}.faa".format(
+            aa_name = "{aminofold}/{seqname}_predictedprots.faa".format(
                                 aminofold=self.output_folder,
                                 seqname=seq_name)
+            command += " -a {}".format(aa_name)
         if cds:
             command += " -d {cdsfold}/{seqname}.fna".format(
                                 cdsfold=self.output_folder,
@@ -49,18 +50,16 @@ class Prodigal_EXEC:
         command = command.format(prodigal=self.prodigal_path,
                         seqpath=abs_filepath, seqname=seq_name,
                         statsfold=self.output_folder).split(" ")
-        print(" ".join(command))
         process = subprocess.Popen(command, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
         output, err = process.communicate()
         if err:
-            outstd_file = "{statsfold}/{seqname}.out".format(
+            outstd_file = "{statsfold}/prodigal.out".format(
                             statsfold=self.log_folder, seqname=seq_name)
-            errstd_file = "{statsfold}/{seqname}.err".format(
+            errstd_file = "{statsfold}/prodigal.err".format(
                             statsfold=self.log_folder, seqname=seq_name)
             with open(outstd_file, "wb") as outfile:
                 outfile.write(output)
             with open(errstd_file, "wb") as errfile:
                 errfile.write(err)
-        return "{aminofold}/{seqname}.faa".format(
-                        aminofold=self.output_folder, seqname=seq_name)
+        return aa_name

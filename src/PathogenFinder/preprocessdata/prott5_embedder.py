@@ -15,6 +15,7 @@ from pathlib import Path
 from tqdm import tqdm
 import gc
 import os
+import logging
 
 import torch
 import h5py
@@ -40,17 +41,17 @@ class ProtT5_Embedder:
 
 
     def get_T5_model(self, model_dir, transformer_link="Rostlab/prot_t5_xl_half_uniref50-enc"):
-        print("Loading: {}".format(transformer_link))
+        logging.info("Loading: {}".format(transformer_link))
         if model_dir is not None:
-            print("##########################")
-            print("Loading cached model from: {}".format(model_dir))
-            print("##########################")
+            logging.info("##########################")
+            logging.info("Loading cached model from: {}".format(model_dir))
+            logging.info("##########################")
         model = T5EncoderModel.from_pretrained(transformer_link, cache_dir=model_dir)
         model.full() if self.device=='cpu' else model.half() # only cast to full-precision if no GPU is available
 
         model = model.to(self.device)
         model = model.eval()
-        vocab = T5Tokenizer.from_pretrained(transformer_link, do_lower_case=False )
+        vocab = T5Tokenizer.from_pretrained(transformer_link, do_lower_case=False, legacy=True)
         return model, vocab
 
     @staticmethod
@@ -185,9 +186,9 @@ class ProtT5_Embedder:
         n_long     = sum([ 1 for _, seq in seq_dict.items() if len(seq)>max_seq_len])
         seq_dict   = sorted( seq_dict.items(), key=lambda kv: len( seq_dict[kv[0]] ), reverse=True )
 
-        print("Amount of sequences: {}".format(len(seq_dict)))
-        print("Average sequence length: {}".format(avg_length))
-        print("Number of sequences >{}: {}".format(max_seq_len, n_long))
+        logging.info("Amount of sequences: {}".format(len(seq_dict)))
+        logging.info("Average sequence length: {}".format(avg_length))
+        logging.info("Number of sequences >{}: {}".format(max_seq_len, n_long))
 
         start = time.time()
         batch = list()
@@ -222,8 +223,8 @@ class ProtT5_Embedder:
                     if split_kmer:
                         oom_err = True
                     else:
-                        print("RuntimeError during embedding for {} (L={}). Try lowering batch size. ".format(pdb_id, seq_len) +
-                               "If single sequence processing does not work, you need more vRAM to process your protein.")
+                        logging.info("RuntimeError during embedding for {} (L={}). Try lowering batch size. ".format(pdb_id, seq_len) +
+                                    "If single sequence processing does not work, you need more vRAM to process your protein.")
                 if oom_err:
                     identifiers, embs_detach, kmered_identifier = self.embed_longbatch(pdb_ids,
                                         seq_lens, token_encoding, maxLen_embed)
@@ -261,9 +262,9 @@ class ProtT5_Embedder:
             hf.create_dataset("K-mer Names", data=names_array)
           
 
-        print('\n############# STATS #############')
-        print('Total number of embeddings: {}'.format(len_file))
-        print('Total time: {:.2f}[s]; time/prot: {:.4f}[s]; avg. len= {:.2f}'.format(
+        logging.info('\n############# STATS #############')
+        logging.info('Total number of embeddings: {}'.format(len_file))
+        logging.info('Total time: {:.2f}[s]; time/prot: {:.4f}[s]; avg. len= {:.2f}'.format(
                   end-start, (end-start)/len_embed, avg_length))
         return True
 

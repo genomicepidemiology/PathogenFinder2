@@ -5,12 +5,12 @@ import pandas as pd
 import os
 from collections import defaultdict
 
-from .train_model import Train_NeuralNetwork
-from .inference_model import Inference_NeuralNetwork
-from .test_model import Test_NeuralNetwork
-from ..utils.nn_utils import Network_Module
-from ..utils.data_utils import NN_Data
-from ..utils.report_utils import ReportNN, Memory_Report, Inference_Report
+from .dl_functions.train_model import Train_NeuralNetwork
+from .dl_functions.inference_model import Inference_NeuralNetwork
+from .dl_functions.test_model import Test_NeuralNetwork
+from .utils.nn_utils import Network_Module
+from .utils.data_utils import NN_Data
+from .utils.report_utils import ReportNN, Memory_Report, Inference_Report
 
 
 
@@ -51,28 +51,28 @@ class Pathogen_DLModel:
     @staticmethod
     def get_model(model_type):
         if model_type == "Conv1D-AddAtt":
-            from dl.models.conv1d_addatt import Conv1D_AddAtt_Net
+            from .models.conv1d_addatt import Conv1D_AddAtt_Net
             return Conv1D_AddAtt_Net
         elif model_type == "Conv1D":
-            from dl.models.conv1d import Conv1D_Net
+            from .models.conv1d import Conv1D_Net
             return Conv1D_Net
         elif model_type == "FNN":
-            from dl.models.fnn import FNN_Net
+            from .models.fnn import FNN_Net
             return FNN_Net
         elif model_type == "AddAtt":
-            from dl.models.addatt import AddAtt_Net
+            from .models.addatt import AddAtt_Net
             return AddAtt_Net
         elif model_type == "DenseNet":
-            from dl.models.densenet import DenseNet_Net
+            from .models.densenet import DenseNet_Net
             return DenseNet_Net
         elif model_type == "DenseNet-AddAtt":
-            from dl.models.densenet_addatt import DenseNet_AddAtt_Net
+            from .models.densenet_addatt import DenseNet_AddAtt_Net
             return DenseNet_AddAtt_Net
         elif model_type == "ConvNext":
-            from dl.models.convnext import ConvNext_Net
+            from .models.convnext import ConvNext_Net
             return ConvNext_Net
         elif model_type == "ConvNext-AddAtt":
-            from ..models.convnext_addatt import ConvNext_AddAtt_Net
+            from .models.convnext_addatt import ConvNext_AddAtt_Net
             return ConvNext_AddAtt_Net
         else:
             raise ValueError(
@@ -88,7 +88,7 @@ class Pathogen_DLModel:
     def train_model(self, train_parameters):
 
         network_module = Network_Module(model_type=self.model_type,
-                                        out_folder=self.misc_parameters["Results Folder"],
+                                        out_folder=self.misc_parameters["Results Folder"]["main"],
                                         model_parameters=self.model_parameters,
                                         mixed_precision=self.model_parameters["Mixed Precision"],
                                         results_module=self.reportNN,
@@ -178,8 +178,8 @@ class Pathogen_DLModel:
                                         num_workers=self.model_parameters["Data Parameters"]["num_workers"],
                                         asynchronity=self.model_parameters["Data Parameters"]["asynchronity"])
 
-            results_inference = inference_instance(return_attentions=inference_parameters["Produce Attentions"],
-                                                    return_embeddings=inference_parameters["Produce Embeddings"])
+            results_inference = inference_instance(return_attentions=inference_parameters["Attentions"],
+                                                    return_embeddings=inference_parameters["Embeddings"])
             
             if not ensemble_results:
                 ensemble_results = {}
@@ -206,8 +206,8 @@ class Pathogen_DLModel:
         results_module = Inference_Report(out_folder=self.misc_parameters["Results Folder"])
         ensemble_results = Inference_Report.get_predictions(ensemble_results=ensemble_results)
         results_module.save_report(results_ensemble=ensemble_results,
-                                    save_attentions=inference_parameters["Produce Attentions"],
-                                    save_embeddings=inference_parameters["Produce Embeddings"])
+                                    save_attentions=inference_parameters["Attentions"],
+                                    save_embeddings=inference_parameters["Embeddings"])
         return ensemble_results
 
 

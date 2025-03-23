@@ -38,9 +38,6 @@ class Batch_Results:
     def get_samples(self):
         samples = {}
         for n in range(len(self)):
-#            name = Path(self.filenames[n]).stem
-            name = self.filenames[n]
-            samples[name] = {}
             samples[name]["Features"] = {}
             samples[name]["Features"]["Filename"] = [self.filenames[n]]
             samples[name]["Features"]["ProtIDs"] = self.protIDs[n][:int(self.proteome_lengths[n][0])]
@@ -87,7 +84,7 @@ class Inference_Report:
 
     def save_report(self, results_ensemble, save_attentions=True, save_embeddings=True):
         for name, val in results_ensemble.items():
-            folder_out_sample = "{}/{}".format(self.out_folder, val["Features"]["Filename"])
+            folder_out_sample = "{}/{}/out/".format(self.out_folder["main"], val["Features"]["Filename"])
             os.mkdir(folder_out_sample)
             val["Ensemble Predictions"].to_frame().to_csv("{}/predictions.tsv".format(folder_out_sample), sep="\t", index=False)
             if save_attentions:
@@ -104,22 +101,27 @@ class Inference_Report:
     def embeddingmap_results(self, embedding_maps_ensemble):
         pass
 
-
 class CGEResults:
 
     def __init__(self):
 
         self.software_result = dict()
         self.phenotype_result = dict()
+        self.proteins_results = dict()
 
     def add_software_result(self):
         # TODO UPDATE AUTOMATIC
+        # TODO software version, branch
         self.software_result["type"] = "software_result"
         self.software_result["software_name"] = "PathogenFinder-2.0.0"
-        self.software_result["software_version"] = "2.0.0"
-        self.software_result["software_branch"] = "dev"
+        self.software_result["software_version"] = ""
+        self.software_result["software_branch"] = ""
         self.software_result["software_commit"] = ""
+        self.software_result["software_log"] = ""
+        self.software_result["run_id"] = ""
         self.software_result["run_date"] = ""
+        self.software_result["phenotypes"] = ""
+        self.software_result["software_exections"] = {}
         
     def add_phenotype_result(self, results_ensemble):
         self.phenotype_result["type"] = "phenotype_ml"
@@ -132,6 +134,9 @@ class CGEResults:
         for n in ["0", "1", "2", "3"]:
             self.phenotype_result["Prediction_{}".format(n)] = results_ensemble["Prediction_{}".format(n)]
         self.phenotype_result["output_std"] = results_ensemble["Prediction STD"]
+
+    def add_proteins_result(self, proteins_df):
+        pass
 
     def save_results(self, output_path):
         results = {"software_result": self.software_result,

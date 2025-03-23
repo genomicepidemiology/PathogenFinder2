@@ -5,7 +5,10 @@
 	"Name": "PathogenFinder2 Run",
         "Actions": ["inference"],
         "Report Results": "file",
-        "Project Name": "PathogenFinder2"
+        "Project Name": "PathogenFinder2",
+	"Prodigal Path": "prodigal",
+	"protT5 Path": "protT5",
+	"Diamond Path": "diamond"
         },
 "Model Parameters":{
         "Model Name": "ConvNext-AddAtt",

@@ -7,16 +7,21 @@ import types
 from pathlib import Path
 from collections import UserDict
 
+from ..utils.os_utils import create_outputfolder
 from .configuration_utils import NNEncoder, ParamsModel
 
 
 class ConfigurationPF2:
 
-    def __init__(self, mode, user_config=False):
+    def __init__(self, mode:str, user_config:tuple[str,dict]):
 
         self.mode = mode
+        self.inference_parameters = None
+        self.train_parameters = None
+        self.test_parameters = None
+        self.hyperopt_parameters = None
 
-        if user_config:
+        if isinstance(user_config, str):
 
             self.misc_parameters = self.init_params(param_group="Misc Parameters",
                                     list_params=["Notes", "Name", "Actions", "Report Results", "Project Name", "Results Folder"])
@@ -26,12 +31,8 @@ class ConfigurationPF2:
                                             "Mixed Precision", "Stochastic Depth Prob", "Sequence Dropout", "Attention Dropout",
                                             "Model Weights", "Batch Size", "Seed", "Stochastic Depth Prob Att", "Memory Report",
                                             "Loss Function", "Network Weights"])
-            self.train_parameters = None
-            self.test_parameters = None
-            self.inference_parameters = None
-            self.hyperopt_parameters = None
-
             self.set_mode_parameters(mode=self.mode)
+
         else:
             std_json_path = "{}/../../../data/configs/config_empty.json".format(Path(__file__).parent.absolute())
             with open(std_json_path, "r") as stdjson:
@@ -48,7 +49,6 @@ class ConfigurationPF2:
                 self.hyperopt_parameters = std_json["Hyperparam_Opt Parameters"]
             else:
                 raise ValueError("The mode {} is not available".format(mode))
-    
 
 
     def set_mode_parameters(self, mode):
@@ -61,7 +61,7 @@ class ConfigurationPF2:
             self.inference_parameters = self.init_params(param_group="Inference Parameters",
                                     list_params=["Preprocessing Parameters", "Sequence Format", "Input Data",
                                                     "Input Location", "Multiple Files", "Input Metadata",
-                                                    "Produce Attentions", "Produce Embeddings"])
+                                                    "Attentions", "Embeddings"])
         elif mode == "Test":
             self.test_parameters = self.init_params(param_group="Test Parameters",
                                     list_params=["Input Data", "Label File", "Sequence Format", "Produce Attentions", "Produce Embeddings"])
@@ -106,36 +106,43 @@ class ConfigurationPF2:
 
     def __str__(self):
         final_dict = self.collect_params()
-        return str(final_dict)
+        out_ = "{"
+        for k, v in final_dict.items():
+            out_ += "\n\t{}: {}".format(k, v)
+        out_ += "\n}"
+        return out_
         
-    def load_args_params(self, args):
-        if args.outputFolder:
-            self.misc_parameters["Results Folder"] = args.outputFolder
+    def load_dict_params(self, dict_args):
+        if dict_args["outputFolder"]:
+            self.misc_parameters["Results Folder"] = create_outputfolder(outpath=os.path.abspath(dict_args["outputFolder"]))
         else:
             raise ValueError("It is necessary to set an output folder with --outputFolder when not using a config file")
-        if args.inputData:
-            self.inference_parameters["Input Data"] = args.inputData
+        if dict_args["inputData"]:
+            self.inference_parameters["Input Data"] = dict_args["inputData"]
         else:
             raise ValueError("It is necessary to set the input file with --inputData when not using a config file")
-        if args.formatSeq:
-            self.inference_parameters["Sequence Format"] = args.formatSeq
+        if dict_args["formatSeq"]:
+            self.inference_parameters["Sequence Format"] = dict_args["formatSeq"]
         else:
             raise ValueError("It is necessary to set what type of sequence with --formatSeq when not using a config file")
-        self.inference_parameters["Multiple Files"] = args.multiFiles
-        self.inference_parameters["Produce Embeddings"] = args.prodEmbeddings
-        self.inference_parameters["Produce Attentions"] = args.prodAttentions
+        self.inference_parameters["Multiple Files"] = dict_args["multiFiles"]
+        self.inference_parameters["Embeddings"] = dict_args["embeddings"]
+        self.inference_parameters["Attentions"] = dict_args["attentions"]
+        
+        self.misc_parameters["Prodigal Path"] = dict_args["prodigalPath"]
+        self.misc_parameters["ProtT5 Path"] = dict_args["protT5Path"]
+        self.misc_parameters["Diamond Path"] = dict_args["diamondPath"]
 
-        if args.weightsModel:
+
+        if dict_args["weightsModel"]:
             files_weights = []
-            for filew in args.formatSeq.split(","):
+            for filew in dict_args["formatSeq"].split(","):
                 files_weights.append(filew.strip())
             self.model_parameters["Network Weights"] = files_weights
         else:
             weights_path = "%s/../../../data/models_weights/weights_model{}.pickle" % Path(__file__).parent.absolute()
             files_weights = [weights_path.format(1), weights_path.format(2), weights_path.format(3), weights_path.format(4)]
             self.model_parameters["Network Weights"] = files_weights
-
-
 
 
     def collect_params(self):

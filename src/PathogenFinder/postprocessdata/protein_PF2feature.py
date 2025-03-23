@@ -6,10 +6,11 @@ import os
 
 class MapProteins:
 
-    def __init__(self, folder:str, db_path:str, diamond_path:str):
-        self.folder = folder
+    def __init__(self, folder_out:str, db_path:str, diamond_path:str, folder_tmp:str=None):
+        self.folder_out = folder_out
         self.db_path = db_path
         self.diamond_path = diamond_path
+        self.folder_tmp = folder_tmp
 
     @staticmethod
     def read_protfasta(file_path:str) -> dict:
@@ -30,7 +31,7 @@ class MapProteins:
                 file_write.write(">{}\n".format(protid))
                 file_write.write("{}\n".format(protseq))
 
-    def read_attentionfile(self, att_file:str, prot_file:str, num_prot:int) -> (str,str):
+    def read_attentionfile(self, att_file:str, prot_file:str, num_prot:int=20) -> (str,str):
         att_data = np.load("{}".format(att_file), allow_pickle=True)
         att = att_data["attentions"]
         protids = att_data["protIDs"]
@@ -50,31 +51,29 @@ class MapProteins:
                 protid_utf8 = protid.decode("utf-8").split()[0]
                 selected_prots[protid_utf8]=prot_seq[protid_utf8]
         df = pd.DataFrame({"ProtNames": prots_pd, "NN": nn_pd, "Attention Value": att_pd})
-        df.to_csv("{}/selected_prots.tsv".format(self.folder), sep="\t", index=False)
+        df.to_csv("{}/selected_prots.tsv".format(self.folder_tmp), sep="\t", index=False)
 
-        MapProteins.write_protfasta(file_path="{}/selected_prots.fsa".format(self.folder),
+        MapProteins.write_protfasta(file_path="{}/selected_prots.fsa".format(self.folder_tmp),
                                     dict_prot=selected_prots)
-        return "{}/selected_prots.tsv".format(self.folder), "{}/selected_prots.fsa".format(self.folder)
+        return "{}/selected_prots.tsv".format(self.folder_tmp), "{}/selected_prots.fsa".format(self.folder_tmp)
 
-    def run_diamond(self, infile:str, num_report:int=1) -> str:
+    def run_diamond(self, infile:str, log_folder:str, num_report:int=1) -> str:
         command = "{diamond_path} blastp -q {query_path} -d {db_path} -o {out_path}/out_diamond.tsv".format(
-                                            diamond_path=self.diamond_path, query_path=infile, db_path=self.db_path, out_path=self.folder)
+                                            diamond_path=self.diamond_path, query_path=infile, db_path=self.db_path, out_path=self.folder_tmp)
         command_opt = " --faster --max-target-seqs {}".format(num_report)
         command_out = " --outfmt 6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qtitle stitle scovhsp slen"
         command += command_opt
         command += command_out
         diamond_proc = subprocess.run(command.split(), stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, universal_newlines=True)
-        stderr_file = "{}/diamond.stderr".format(self.folder)
+        stderr_file = "{}/diamond.stderr".format(log_folder)
         with open(stderr_file, "w") as createdberr:
             createdberr.write(diamond_proc.stderr)
-        return "{out_path}/out_diamond.tsv".format(out_path=self.folder)
+        return "{out_path}/out_diamond.tsv".format(out_path=self.folder_tmp)
 
     def analyze_results(self, infile:str, df_att:pd.DataFrame, amount_hits:int=1):
         data_diamond = pd.read_csv(infile, sep="\t", names=["qseqid","sseqid","pident","length","mismatch","gapopen","qstart","qend",
                                                                 "sstart","send","evalue","bitscore","qtitle","stitle", "scovhsp", "slen"])
-        print(data_diamond)
-        print(df_att)
         df_att["ProtIDs"] = df_att["ProtNames"].str.split().str[0]
         list_prots = np.unique(data_diamond["qseqid"]).tolist()
         data_list = []
@@ -91,10 +90,11 @@ class MapProteins:
                 data_list.append(prot_df)
         data_df = pd.concat(data_list)
         data_df = data_df.set_index(["ProtIDs", "ProtNames", "NN", "Attention Value"])
-        data_df.to_csv("{}/mapped_proteins.tsv".format(self.folder), sep="\t")
+        data_df.to_csv("{}/mapped_proteins.tsv".format(self.folder_out), sep="\t")
+        return data_df
 
 
-    def analyze_nn_results(self, protID:str, data_diamond:pd.DataFrame, amount_hits:int) -> pd.DataFrame:
+    def analyze_nn_results(self, protID:str, data_diamond:pd.DataFrame, amount_hits:int=1) -> pd.DataFrame:
         prot_df = data_diamond[data_diamond["qseqid"]==protID].sort_values(by=['pident'], ascending=False).head(amount_hits)
         if len(prot_df) == 0:
             (ref_id, ref_name, identity, alignment_length, ref_gene_length, coverage,
@@ -126,20 +126,23 @@ def get_args():
     parser.add_argument('--prot_path', help='Path to protein fasta file')
     parser.add_argument('--att_path', help='Path to attention npz file')
     parser.add_argument('--log_folder', help='Folder for the logs of diamond')
-    parser.add_argument('--amount_hits', help="Amount of hits reported", default=3)
+    parser.add_argument('--amount_hits', help="Amount of hits reported", default=1)
     parser.add_argument('--amount_prots', help="Amount of proteins reported", default=20)
     parser.add_argument("--out_folder", help='Folder where to output results', required=True)
+    parser.add_argument("--tmp_folder", help="Folder where to output temporary files", default=None)
     return parser.parse_args()
 
 def main():
     args = get_args()
+    if args.tmp_folder is None:
+        args.tmp_folder = args.out_folder
     mapprot = MapProteins(folder=args.out_folder,
                           diamond_path=args.diamond_path,
                           db_path=args.db_path)
     tsv_file, fsa_file = mapprot.read_attentionfile(att_file=args.att_path,
                                     prot_file=args.prot_path,
                                     num_prot=args.amount_prots)
-    diamond_file = mapprot.run_diamond(infile=fsa_file, num_report=args.amount_hits)
+    diamond_file = mapprot.run_diamond(infile=fsa_file, num_report=args.amount_hits, log_folder=args.log_folder)
     mapprot.analyze_results(infile=diamond_file, df_att=pd.read_csv(tsv_file, sep="\t"), amount_hits=args.amount_hits)
 
 
