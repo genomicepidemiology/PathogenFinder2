@@ -166,6 +166,10 @@ The output folder will contain a folder with the configuration used for running 
         * *mapped_proteins.tsv*: hits of the top proteins highlighted by the attentions score on the UniRef50 database. Only produced if --attentions is used with "map".
         * *cge_out.json*: results in the cge format. Only produced if --cge is used.
 
+##### Example
+```unix
+pathogenfinder2 inference -i test/data/GCF_000014385.1_ASM1438v1_genomic.fna.gz -f genome -o test/out --prodigalPath path/to/prodigal --embeddings report --attentions report
+```
 
 #### Test
 ```unix

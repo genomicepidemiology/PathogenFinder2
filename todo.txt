@@ -1,5 +1,3 @@
 # NEeed to add:
-- pyproject.toml
 - CONTRIBUTING.md 
 - CHANGELOG.md
-- CODE_OF_CONDUCT.md

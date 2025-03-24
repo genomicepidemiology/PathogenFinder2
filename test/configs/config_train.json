@@ -1,0 +1,57 @@
+{
+"Misc Parameters": {
+	"Notes": "This is a base config file",
+	"Name": "test1",
+	"Results Folder": "../../test/test2",
+	"Actions": ["train"],
+	"Report Results": "wandb",
+	"Project Name": "PathogenFinder2"
+	},
+"Model Parameters":{
+	"Model Name": "ConvNext-AddAtt",
+	"Seed": 1,
+	"Input Dimensions": 1024,
+	"Network Structure":{
+		"Stem Cell": true,
+		"Num Blocks":2,
+		"Block Dimensions": 64,
+		"Attention Dimensions": 64,
+		"FNN Dimensions": 0,
+		"Length Information":"concat1",
+		"Length Dimensions": 30,
+		"Residual Attention": false},
+	"Out Dimensions": 1,
+	"Batch Size": 4,
+	"Norm Scale": 1e-6,
+	"Norm Type": "Layer",
+	"Attention Norm": true,
+        "Mixed Precision": true,
+        "Stochastic Depth Prob": 0.4,
+        "Stochastic Depth Prob Att": false,
+        "Sequence Dropout": 0.3,
+        "Attention Dropout": 0.4,
+        "Memory Report": false,
+	"Loss Function": "bcelogits",
+	"Data Parameters":{
+		"asynchronity": true,
+		"num_workers": 8,
+		"bucketing": false,
+		"stratified": true
+		}
+	},
+"Train Parameters":{
+	"Optimizer Parameters":{
+		"optimizer": "NAdam",
+		"lr_scheduler": "ReduceLROnPlateau",
+		"warm_up": 2,
+		"weight_decay": 1e-4,
+		"lr_end": null,
+		"learning_rate": 1e-4},
+	"Epochs": 4,
+	"Save Model": "best_epoch",
+        "Train DF": "/work3/alff/embeddings/metadata/debug_metadataTRAIN90.tsv",
+        "Train Loc": "/work3/alff/embeddings/data/",
+        "Validation DF": "/work3/alff/embeddings/metadata/debug_metadataTEST90.tsv",
+        "Validation Loc": "/work3/alff/embeddings/data/"
+}               
+}
