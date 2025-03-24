@@ -30,7 +30,7 @@ readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["deep learning", "epidemiology", "microbiology"]
 [project.optional-dependencies]
-phenotype_extra = ["umap-learn==0.5.4", "seaborn", "matplotlib"]
+mapping = ["umap-learn==0.5.4", "seaborn", "matplotlib"]
 [project.urls]
 Homepage = "https://example.com"
 Documentation = "https://readthedocs.org"
@@ -40,7 +40,7 @@ Changelog = "https://github.com/genomicepidemiology/PathogenFinder/blob/master/C
 
 [project.scripts]
 pathogenfinder2 = "PathogenFinder.pathogenfinder2:main"
-pathogenfinder2_phenotype = "ExtraPhenotype.pathogenfinder2_phenotype:main"
+pathogenfinder2_mapping = "PathogenFinder.pathogenfinder2_mapping:main"
 
 [tool.setuptools]
 #Fille

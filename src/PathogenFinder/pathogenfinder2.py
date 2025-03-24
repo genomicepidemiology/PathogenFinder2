@@ -14,7 +14,7 @@ from .utils.configuration_module import ConfigurationPF2
 from .dl.model import Pathogen_DLModel
 from .dl.utils.data_utils import NN_Data
 from .dl.utils.report_utils import CGEResults
-from .pathogenfinder2_mapping import PathogenFinder2_Mapping
+
 
 DATA_FOLDER = "{}/../../data/".format(Path(__file__).parent.resolve())
 
@@ -38,7 +38,7 @@ def cl_arguments():
                                     description="Paths to executables. They might not be necessary.")
     exec_paths.add_argument("--prodigalPath", help="Path to Prodigal", default="prodigal")
     exec_paths.add_argument("--protT5Path", help="Path to protT5", default="protT5")
-    exec_paths.add_argument("--diamondPath", help="Patho to Diamond", default="diamond")
+    exec_paths.add_argument("--diamondPath", help="Path to Diamond", default="diamond")
 
     subparsers = parser.add_subparsers(title="PathogenFinder functionalities", required=True)
 
@@ -177,6 +177,7 @@ class PathogenFinder2:
         predicted_data = self.model.predict_model(inference_parameters=inference_parameters)
 
         if self.pf2_config.inference_parameters["Attentions"] == "map" or self.pf2_config.inference_parameters["Embeddings"] == "map":
+            from .pathogenfinder2_mapping import PathogenFinder2_Mapping
             for n in range(len(input_metadata)):
                 folder_sample = "{}/{}".format(self.pf2_config.misc_parameters["Results Folder"]["main"],
                                            os.path.basename(input_metadata.loc[n, "Input Files"]))

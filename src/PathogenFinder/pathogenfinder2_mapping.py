@@ -1,5 +1,7 @@
 import os
 import argparse
+from pathlib import Path
+
 
 from .postprocessdata.protein_PF2feature import MapProteins
 from .postprocessdata.embedding_PF2feature import MapEmbeddings
@@ -7,13 +9,13 @@ from .postprocessdata.embedding_PF2feature import MapEmbeddings
 DATA_FOLDER = "{}/../../data/".format(Path(__file__).parent.resolve())
 
 def cl_arguments():
-    parser = argparse.ArgumentParser(prog='Pathogenfinder2.0 Mapping',
+    parser = argparse.ArgumentParser(prog='Pathogenfinder2 Mapping',
                             description="Arguments for mapping the proteins highlighted by the attention layer, or "
                                      "for mapping the embeddings on the Patogenic Bacterial Landscape.",
                             add_help=True)
     parent_parser = argparse.ArgumentParser(add_help=False)
-    subparsers = parser.add_subparsers(title="PathogenFinder functionalities", required=True)
-    subparser.add_argument("-o", "--out_folder", help="Folder where to output the results")
+    subparsers = parser.add_subparsers(title="PathogenFinder2 Mapping functionalities", required=True)
+    parent_parser.add_argument("-o", "--out_folder", help="Folder where to output the results")
     map_proteins = subparsers.add_parser("proteins", help="Map the proteins highlighted by the attention layer to a protien database",
                                              parents=[parent_parser])
     map_proteins.set_defaults(action="MapProteins")
@@ -26,7 +28,7 @@ def cl_arguments():
     map_proteins.add_argument("--diamond_path", help="Path to Diamond aligner")
     map_proteins.add_argument("--tmp_folder", help="Folder for products of the aligning of Diamond", default=None)
 
-    neighbors_bpl = subparsers.add_parser("map_embeddings", help="Map embeddings produced by PF2 model to the dataset of pathogenic genomic sequences landscape",
+    neighbors_bpl = subparsers.add_parser("embeddings", help="Map embeddings produced by PF2 model to the dataset of pathogenic genomic sequences landscape",
                                           parents=[parent_parser])
     neighbors_bpl.set_defaults(action="NeighborsBPL")
     neighbors_bpl.add_argument('--embeddings_bpl', help='Path to the npz file with the embeddings from the PF2 paper', default="../../data/embeddings_BPL/")
