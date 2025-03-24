@@ -273,6 +273,7 @@ PathogenFinder2 Mapping functionalities:
     embeddings      Map embeddings produced by PF2 model to the dataset of pathogenic genomic sequences landscape
 
 ```
+**Important**: If mapping the embeddings, please unzip the file *data/embeddings_BPL/embeddings.npz.gz* containing the information of the Bacterial Pathogenic Landscape.
 
 #### Mapping Embeddings
 
