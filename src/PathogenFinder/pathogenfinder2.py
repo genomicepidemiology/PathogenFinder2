@@ -17,6 +17,7 @@ from .dl.utils.report_utils import CGEResults
 
 
 DATA_FOLDER = "{}/../../data/".format(Path(__file__).parent.resolve())
+BIN_FOLDER = "{}/../../bin/".format(Path(__file__).parent.resolve())
 
 def cl_arguments():
     parser = argparse.ArgumentParser(prog='Pathogenfinder2.0 Model',
@@ -38,7 +39,7 @@ def cl_arguments():
                                     description="Paths to executables. They might not be necessary.")
     exec_paths.add_argument("--prodigalPath", help="Path to Prodigal", default="prodigal")
     exec_paths.add_argument("--protT5Path", help="Path to protT5", default="protT5")
-    exec_paths.add_argument("--diamondPath", help="Path to Diamond", default="diamond")
+    exec_paths.add_argument("--diamondPath", help="Path to Diamond", default="{}/diamond".format(BIN_FOLDER))
 
     subparsers = parser.add_subparsers(title="PathogenFinder functionalities", required=True)
 
@@ -81,22 +82,25 @@ class PathogenFinder2:
                                       misc_parameters=self.pf2_config.misc_parameters,
                                       seed=self.pf2_config.model_parameters["Seed"])
 
-    def predict_proteincontent(self, input_seq, log_folder, out_folder, prodigal_path="prodigal"):
+    def predict_proteincontent(self, input_seq, log_folder, out_folder, prodigal_path="prodigal", cge_output=False):
         # Set up folder
         logging.info("Using device: {}".format("cpu"))
 
         prodigal_exec = Prodigal_EXEC(log_folder=log_folder, output_folder=out_folder,
                                 prodigal_path=prodigal_path)
-        protein_file = prodigal_exec(input_seq)
+        protein_file = prodigal_exec(input_seq, cge_output=cge_output)
         return protein_file
 
     def inference_embeddings(self, embed_out, input_seq=None, input_txt=None, model_path=None,
-                                pool_mode="mean", split_kmer=True):
+                                pool_mode="mean", split_kmer=True, cge_output=False):
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         logging.info("Using device: {}".format(device))
 
         filename, ext = get_filename(input_seq)
-        embedding_file = "{}/{}_protembeddings.h5".format(embed_out, filename)
+        if cge_output:
+            embedding_file = "{}/ProteinEmbeddings.h5".format(embed_out, filename)
+        else:
+            embedding_file = "{}/{}_protembeddings.h5".format(embed_out, filename)
         if input_seq is None and input_txt is None:
             raise argparse.ArgumentParser.error("Arguments input and file_paths cannot be used at the same time.")
         elif input_seq is not None and input_txt is not None:
@@ -133,8 +137,11 @@ class PathogenFinder2:
             message_pre = "================== Preprocessing {} ({}) file =====================".format(
                                                                                     n, os.path.basename(input_metadata.loc[n, "Input Files"]))
             print(message_pre)
-            folder_sample = "{}/{}".format(self.pf2_config.misc_parameters["Results Folder"]["main"],
-                                           os.path.basename(input_metadata.loc[n, "Input Files"]))
+            if cge_output:
+                folder_sample = "{}/results/".format(self.pf2_config.misc_parameters["Results Folder"]["main"])
+            else:
+                folder_sample = "{}/{}".format(self.pf2_config.misc_parameters["Results Folder"]["main"],
+                                               os.path.basename(input_metadata.loc[n, "Input Files"]))
             os.mkdir(folder_sample) 
             preproc_folder = "{}/preprocessing".format(folder_sample)
             postproc_folder = "{}/postprocessing".format(folder_sample)
@@ -148,16 +155,18 @@ class PathogenFinder2:
                 input_metadata.loc[n, "File_Genome"] = input_metadata.loc[n,"Input Files"]
                 input_metadata.loc[n, "File_Proteins"] = self.predict_proteincontent(
                                                                 input_seq=input_metadata.loc[n, "File_Genome"], out_folder=preproc_folder,
-                                                                log_folder=log_folder, prodigal_path=self.pf2_config.misc_parameters["Prodigal Path"])
+                                                                log_folder=log_folder, prodigal_path=self.pf2_config.misc_parameters["Prodigal Path"],
+                                                                cge_output=cge_output)
             else:
                 input_metadata.loc[n, "File_Genome"] = None
                 input_metadata.loc[n, "File_Proteins"] = input_metadata.loc[n,"Input Files"]
-            print(input_metadata.iloc[0]["File_Proteins"])
+
             if inference_parameters["Sequence Format"] == "genome" or inference_parameters["Sequence Format"] == "proteome":
                 print("Predicting the embeddings of the protein content")
                 try:
                     input_metadata.loc[n, "File_Embedding"] = self.inference_embeddings(
-                                                    embed_out=preproc_folder, input_seq=input_metadata.loc[n, "File_Proteins"])
+                                                    embed_out=preproc_folder, input_seq=input_metadata.loc[n, "File_Proteins"],
+                                                    cge_output=cge_output)
                 except ZeroDivisionError:
                     raise TypeError("""Prodigal has not been able to predict any proteins in your file {}. """
                     """Please check that your file is an uncompressed FASTA file with a valid genomic sequence""".format(input_metadata.loc[n, "File_Genome"]))
@@ -170,17 +179,24 @@ class PathogenFinder2:
         metadata_file = "{}/data_input.tsv".format(self.pf2_config.misc_parameters["Results Folder"]["conf"])
         input_metadata.to_csv(metadata_file, sep="\t", index=False)
         inference_parameters["Input Metadata"] = metadata_file
+
         print("Predicting the pathogenicity of the samples in the files {}".format(
                             ", ".join(input_metadata["Input Files"].apply(lambda x: os.path.basename(x)).tolist())))
+        
         device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         logging.info("Using device: {}".format(device))
         predicted_data = self.model.predict_model(inference_parameters=inference_parameters)
 
+        extra_phenotype = {"MapEmbeddings": {}, "MapAttentions": {}}
+
         if self.pf2_config.inference_parameters["Attentions"] == "map" or self.pf2_config.inference_parameters["Embeddings"] == "map":
             from .pathogenfinder2_mapping import PathogenFinder2_Mapping
             for n in range(len(input_metadata)):
-                folder_sample = "{}/{}".format(self.pf2_config.misc_parameters["Results Folder"]["main"],
-                                           os.path.basename(input_metadata.loc[n, "Input Files"]))
+                if cge_output:
+                    folder_sample = "{}/results/".format(self.pf2_config.misc_parameters["Results Folder"]["main"])
+                else:
+                    folder_sample = "{}/{}".format(self.pf2_config.misc_parameters["Results Folder"]["main"],
+                                               os.path.basename(input_metadata.loc[n, "Input Files"]))
                 postproc_folder = "{}/postprocessing".format(folder_sample)
                 log_folder = "{}/log".format(folder_sample)
 
@@ -195,22 +211,29 @@ class PathogenFinder2:
                                                     db_path=db_path, prot_path=input_metadata.loc[n, "File_Proteins"],
                                                     att_path="{}/out/attentions.npz".format(folder_sample),
                                                     log_folder=log_folder, amount_prots=20, amount_hits=1)
+                    extra_phenotype["MapAttentions"][os.path.basename(input_metadata.iloc[0]["Input Files"])] = mapped_data
                 if self.pf2_config.inference_parameters["Embeddings"] == "map":
                     print("Mapping the sequence {} to the Bacterial Landscap Pathogen".format(
                                                                 os.path.basename(input_metadata.iloc[0]["Input Files"])))
                     embed_file = "{}/out/embeddings.npz".format(folder_sample)
                     close_emb = PathogenFinder2_Mapping.map_embeddings(embeddings_bpl="{}/embeddings_BPL/embeddings.npz".format(DATA_FOLDER),
-                                                embeddings_pred=embed_file, folder_out="{}/out".format(folder_sample))
+                                                                    embeddings_pred=embed_file, folder_out="{}/out".format(folder_sample))
+                    extra_phenotype["MapEmbeddings"][os.path.basename(input_metadata.iloc[0]["Input Files"])] = close_emb
     
-        return predicted_data
+        return predicted_data, extra_phenotype
 
-    @staticmethod
-    def create_cge_output(predicted_data:str, output_folder:str):
-        for k, val in predicted_data:
+    def create_cge_output(self, predicted_data:str, extra_phenotype:dict, output_folder:str):
+        for k, val in predicted_data.items():
+            name = os.path.basename(k)
             json_cge = CGEResults()
             json_cge.add_software_result()
+            json_cge.add_software_exec(config=self.pf2_config)
             json_cge.add_phenotype_result(results_ensemble=val["Ensemble Predictions"])
-            json_cge.save_result(output_path="{}/{}".format(output_folder, val["Features"]["Filename"]))
+            if name in extra_phenotype["MapEmbeddings"]:
+                json_cge.add_bacterialneighbors(query_id=name, neighbors_df=extra_phenotype["MapEmbeddings"][name])
+            if name in extra_phenotype["MapAttentions"]:
+                json_cge.add_proteinsatt(proteins_df=extra_phenotype["MapAttentions"][name])
+            json_cge.save_results(output_path="{}/results/out/".format(output_folder))
 
 
     def train(self, train_parameters):
@@ -222,8 +245,9 @@ class PathogenFinder2:
         self.model.test_model(predicted_data=predicted_data, test_parameters=test_parameters)
 
     def save_config(self):
+        conf_dict = self.pf2_config.collect_params()
         with open("{}/config.json".format(self.pf2_config.misc_parameters["Results Folder"]["conf"]), 'w') as f:
-            json.dump(self.pf2_config, f)
+            json.dump(conf_dict, f)
 
 
 
@@ -248,10 +272,11 @@ def main():
     elif args.action == "Hyperparam_opt":
         pathogenfinder_run.hyperparam_opt()
     elif args.action == "Inference":
-        predicted_data = pathogenfinder_run.inference()
+        predicted_data, extra_phenotype = pathogenfinder_run.inference(args.cge)
         if args.cge:
-            PathogenFinder2.create_cge_output(predicted_data=predicted_data,
-                                              output_folder=pathogefinder_run.pf2_config.misc_parameters["Results Folder"]["main"]) 
+            pathogenfinder_run.create_cge_output(predicted_data=predicted_data,
+                            extra_phenotype=extra_phenotype,
+                           output_folder=pathogenfinder_run.pf2_config.misc_parameters["Results Folder"]["main"]) 
     else:
         raise ValueError("No valid option ({}) for using pathogenfinder was selected".format(args.action))
 

@@ -38,6 +38,8 @@ class MapEmbeddings:
         tax = self.data_embed['taxonomy_id'][indices].flatten()
         closer_df = pd.DataFrame({"Names": names, "Species": species, "Strain": strain, "RefSeq": refseq,
                                   "Taxonomy": tax, "Distances": distances.flatten()})
+        closer_df = closer_df.astype({'Names': str, "Species": str, "Strain": str, "RefSeq": str, "Taxonomy": "int32", "Distances":"float32"})
+
         closer_df.to_csv("{}/closeneighbors_bpl.tsv".format(self.out_folder), sep="\t", index=False)
         closer_arr = np.squeeze(self.train_data[indices])
         return closer_df, closer_arr

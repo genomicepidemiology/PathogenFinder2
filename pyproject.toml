@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "PathogenFinder2"
 version = "0.5.0"
-dependencies = ["pandas >= 2.2.2",
+dependencies = ["pandas >= 2.2.2", "accelerate",
 		"matplotlib", "scikit-learn", "torch >= 2.3.1",
 	        "tqdm", "h5py","sentencepiece",
 	        "transformers", "pytorch_warmup",
@@ -30,7 +30,7 @@ readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["deep learning", "epidemiology", "microbiology"]
 [project.optional-dependencies]
-mapping = ["umap-learn==0.5.4", "seaborn", "matplotlib"]
+mapping = ["umap-learn==0.5.4", "seaborn"]
 [project.urls]
 Homepage = "https://example.com"
 Documentation = "https://readthedocs.org"

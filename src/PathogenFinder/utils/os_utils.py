@@ -10,8 +10,9 @@ def get_filename(file_path:str) -> (str,str):
     
 
 def create_outputfolder(outpath:str) -> str:
-    out_folder = '{outpath}_{date:%Y-%m-%d_%H-%M-%S}'.format(outpath=outpath,
-                                                               date=datetime.datetime.now())
+ #   out_folder = '{outpath}_{date:%Y-%m-%d_%H-%M-%S}'.format(outpath=outpath,
+#                                                               date=datetime.datetime.now())#
+    out_folder = "{}".format(outpath)
     out_paths = {"main": out_folder,
                  "conf": "{}/configuration".format(out_folder)
                  }

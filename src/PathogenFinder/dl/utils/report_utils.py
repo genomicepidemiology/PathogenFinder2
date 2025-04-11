@@ -38,6 +38,8 @@ class Batch_Results:
     def get_samples(self):
         samples = {}
         for n in range(len(self)):
+            name = str(self.filenames[n])
+            samples[name] = {}
             samples[name]["Features"] = {}
             samples[name]["Features"]["Filename"] = [self.filenames[n]]
             samples[name]["Features"]["ProtIDs"] = self.protIDs[n][:int(self.proteome_lengths[n][0])]
@@ -75,16 +77,19 @@ class Inference_Report:
             predictionPF["Prediction STD"] = np.std(val["Output"]["Prediction"])
             if predictionPF["Prediction Mean"] > 0.5:
                 predictionPF["Binary Prediction Mean"] = 1
-                predictionPF["Phenotype Mean"] = "Human Pathogenic"
+                predictionPF["Phenotype"] = "Human Pathogenic"
             else:
-                predictionPF["Phenotype Mean"] = "Human Non Pathogenic"
+                predictionPF["Phenotype"] = "Human Non Pathogenic"
                 predictionPF["Binary Prediction Mean"] = 0
             ensemble_results[name]["Ensemble Predictions"] = predictionPF
         return ensemble_results
 
-    def save_report(self, results_ensemble, save_attentions=True, save_embeddings=True):
+    def save_report(self, results_ensemble, save_attentions=True, save_embeddings=True, cge_output=False):
         for name, val in results_ensemble.items():
-            folder_out_sample = "{}/{}/out/".format(self.out_folder["main"], val["Features"]["Filename"])
+            if cge_output:
+                folder_out_sample = "{}/results/out/".format(self.out_folder["main"])
+            else:
+                folder_out_sample = "{}/{}/out/".format(self.out_folder["main"], val["Features"]["Filename"])
             os.mkdir(folder_out_sample)
             val["Ensemble Predictions"].to_frame().to_csv("{}/predictions.tsv".format(folder_out_sample), sep="\t", index=False)
             if save_attentions:
@@ -106,15 +111,33 @@ class CGEResults:
     def __init__(self):
 
         self.software_result = dict()
+        self.software_exec = dict()
         self.phenotype_result = dict()
-        self.proteins_results = dict()
+        self.proteins_results = list()
+        self.neighbors_results = list()
+
+    def add_software_exec(self, config:dict):
+        self.software_exec["type"] = "software_exec"
+        self.software_exec["key"] = ""
+        self.software_exec["software_name"] = "PathogenFinder2"
+        self.software_exec["command"] = ""
+        self.software_exec["parameters"] = {}
+        self.software_exec["parameters"]["inputfile"] = config.inference_parameters["Input Data"]
+        self.software_exec["parameters"]["Produce Attentions"] = config.inference_parameters["Attentions"]
+        self.software_exec["parameters"]["Produce Embeddings"] = config.inference_parameters["Embeddings"]
+        self.software_exec["parameters"]["Sequence Format"] = config.inference_parameters["Sequence Format"]
+        self.software_exec["stdout"] = ""
+        self.software_exec["stderr"] = ""
+
+
 
     def add_software_result(self):
         # TODO UPDATE AUTOMATIC
         # TODO software version, branch
         self.software_result["type"] = "software_result"
-        self.software_result["software_name"] = "PathogenFinder-2.0.0"
-        self.software_result["software_version"] = ""
+        self.software_result["key"] = "PathogenFinder2-0.0.4"
+        self.software_result["software_name"] = "PathogenFinder2"
+        self.software_result["software_version"] = "0.0.4"
         self.software_result["software_branch"] = ""
         self.software_result["software_commit"] = ""
         self.software_result["software_log"] = ""
@@ -129,19 +152,76 @@ class CGEResults:
         self.phenotype_result["category"] = "Pathogenicity"
         self.phenotype_result["ensemble_pred"] = True
         self.phenotype_result["type_pred"] = "Categorical"
-        self.phenotype_result["prediction"] = results_ensemble["Phenotype Mean"]
+        self.phenotype_result["prediction"] = results_ensemble["Phenotype"]
         self.phenotype_result["output_model"] = {}
         for n in ["0", "1", "2", "3"]:
-            self.phenotype_result["Prediction_{}".format(n)] = results_ensemble["Prediction_{}".format(n)]
-        self.phenotype_result["output_std"] = results_ensemble["Prediction STD"]
+            self.phenotype_result["Prediction_{}".format(n)] = round(results_ensemble["Prediction_{}".format(n)],4)
+        self.phenotype_result["output_mean"] = round(results_ensemble["Prediction Mean"], 4)
+        self.phenotype_result["output_std"] = round(results_ensemble["Prediction STD"], 4)
+    
+    def add_bacterialneighbors(self, query_id:str, neighbors_df:pd.DataFrame):
+        for n in range(len(neighbors_df)):
+            entry = neighbors_df.iloc[n]
+            neighbor = {}
+            neighbor["key"] = "{}_{}".format(query_id, entry["Names"])
+            neighbor["query_id"] = query_id
+            neighbor["query_name"] = query_id
+            neighbor["ref_id"] = "{}_{}".format(entry["Names"], entry["RefSeq"])
+            neighbor["ref_name"] = entry["Names"]
+            neighbor["ref_acc"] = entry["RefSeq"]
+            neighbor["distance_measure"] = "minkowski"
+            neighbor["distance_value"] = entry["Distances"].item()
+            neighbor["ref_database"] = "PathogenFinder2"
+            neighbor["type_sequence"] = "Proteome"
+            neighbor["type_compared"] = "PF2_Embedding"
+            neighbor["ref_taxID"] = entry["Taxonomy"].item()
+            neighbor["ref_species"] = entry["Species"]
+            neighbor["ref_strain"] = entry["Strain"]
+            neighbor["software"] = "Scikit-learn"
+            neighbor["rank_neighbors"] = str(n)
+            self.neighbors_results.append(neighbor)
+            
 
-    def add_proteins_result(self, proteins_df):
-        pass
+    def add_proteinsatt(self, proteins_df):
+        for n in range(len(proteins_df)):
+            entry = proteins_df.iloc[n]
+            protein = {}
+            protein["key"] = "{}_{}".format(entry["Query_ID"], entry["Ref_ID"])
+            protein["gene"] = "Protein"
+            protein["name"] = entry["Ref_name"]
+            protein["identity"] = entry["Identity"].item()
+            protein["alignment_length"] = entry["Alignment_Length"].item()
+            protein["ref_seq_lenght"] = entry["Ref_Length"].item()
+            protein["coverage"] = entry["Ref_coverage"].item()
+            protein["ref_id"] = entry["Ref_ID"]
+            protein["ref_acc"] = entry["Ref_ID"]
+            protein["ref_start_pos"] = entry["Ref_start_pos"].item()
+            protein["ref_end_pos"] = entry["Ref_end_pos"].item()
+            protein["query_id"] = entry["Query_ID"]
+            protein["query_start_pos"] = entry["Query_start_pos"].item()
+            protein["query_end_pos"] = entry["Query_end_pos"].item()
+            protein["ref_database"] = "UniRef50"
+#            protein["note"] = "Attention Score {}".format(entry["Attention Value"])
+            if protein["coverage"] == 100. and protein["identity"] == 100.:
+                protein["grade"] = 3
+            elif protein["coverage"] == 100. and protein["identity"] < 100.:
+                protein["grade"] = 2
+            elif protein["coverage"] < 100.:
+                protein["grade"] = 1
+            else:
+                protein["grade"] = 0
+
+            self.proteins_results.append(protein)
 
     def save_results(self, output_path):
         results = {"software_result": self.software_result,
-                   "phenotype_ml": self.phenotype_result
+                   "phenotype_ml": self.phenotype_result,
+                   "software_executions": self.software_exec,
                    }
+        if len(self.neighbors_results) > 0:
+            results["pathogenic_neighbors"] = self.neighbors_results
+        if len(self.proteins_results) > 0:
+            results["protein_results"] = self.proteins_results
         with open("{}/cge_output.json".format(output_path), 'w') as f:
             json.dump(results, f)
 

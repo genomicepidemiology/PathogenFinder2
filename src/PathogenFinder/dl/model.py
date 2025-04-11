@@ -207,7 +207,8 @@ class Pathogen_DLModel:
         ensemble_results = Inference_Report.get_predictions(ensemble_results=ensemble_results)
         results_module.save_report(results_ensemble=ensemble_results,
                                     save_attentions=inference_parameters["Attentions"],
-                                    save_embeddings=inference_parameters["Embeddings"])
+                                    save_embeddings=inference_parameters["Embeddings"],
+                                   cge_output=inference_parameters["CGE Output"])
         return ensemble_results
 
 

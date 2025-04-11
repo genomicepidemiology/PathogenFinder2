@@ -64,6 +64,7 @@ class MapProteins:
         command_out = " --outfmt 6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qtitle stitle scovhsp slen"
         command += command_opt
         command += command_out
+        print(command)
         diamond_proc = subprocess.run(command.split(), stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, universal_newlines=True)
         stderr_file = "{}/diamond.stderr".format(log_folder)
@@ -71,7 +72,8 @@ class MapProteins:
             createdberr.write(diamond_proc.stderr)
         return "{out_path}/out_diamond.tsv".format(out_path=self.folder_tmp)
 
-    def analyze_results(self, infile:str, df_att:pd.DataFrame, amount_hits:int=1):
+    def analyze_results(self, infile:str, df_att:str, amount_hits:int=1):
+        df_att = pd.read_csv(df_att, sep="\t")
         data_diamond = pd.read_csv(infile, sep="\t", names=["qseqid","sseqid","pident","length","mismatch","gapopen","qstart","qend",
                                                                 "sstart","send","evalue","bitscore","qtitle","stitle", "scovhsp", "slen"])
         df_att["ProtIDs"] = df_att["ProtNames"].str.split().str[0]

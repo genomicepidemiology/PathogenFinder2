@@ -1,16 +1,16 @@
-FROM python:3.10-slim-bullseye
+FROM python:3.12-slim-bullseye
 
-ENV INSIDE_DOCKER true
-ENV DEBIAN_FRONTEND noninteractive
+ENV INSIDE_DOCKER=true
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -qq; \
-    apt-get install --no-install-recommends -y -qq git \
+    apt-get install --no-install-recommends -y -qq git wget\
     build-essential \
     prodigal \
     ; \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*;
 
-ENV PATHOGENFINDER_VERSION 2.0.0
+ENV PATHOGENFINDER_VERSION=2.0.0
 
 
 # Setup environment
@@ -20,9 +20,10 @@ ADD .. /app
 WORKDIR /app
 RUN cd /; mkdir pathogenfinder2
 ADD .. /pathogenfinder2
-RUN cd /pathogenfinder2; pip install -e .[main]
+#RUN gunzip /pathogenfinder2/data/embeddings_BPL/embeddings.npz.gz
+RUN cd /pathogenfinder2; pip install -e .[mapping]
 
-#RUN pip install -e .[main]
+#RUN pip install -e .[mapping]
 
 # Execute program when running the container
 ENTRYPOINT ["pathogenfinder2"]

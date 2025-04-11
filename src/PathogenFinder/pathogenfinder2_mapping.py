@@ -48,15 +48,16 @@ class PathogenFinder2_Mapping:
         tsv_file, fsa_file = mapprot.read_attentionfile(att_file=att_path,
                                                         prot_file=prot_path)
         diamond_file = mapprot.run_diamond(infile=fsa_file, num_report=amount_hits, log_folder=log_folder)
-        mapped_data = mapprot.analyze_results(infile=diamond_file, df_att=pd.read_csv(tsv_file, sep="\t"))
+        mapped_data = mapprot.analyze_results(infile=diamond_file, df_att=tsv_file)
         return mapped_data
 
     @staticmethod
-    def map_embeddings(self, folder_out:str, embeddings_bpl:str, embeddings_pred:str):
+    def map_embeddings(folder_out:str, embeddings_bpl:str, embeddings_pred:str):
         mapemb = MapEmbeddings(out_folder=folder_out, data_embed=embeddings_bpl)
         test_transf = mapemb.fittestdata(testdata=embeddings_pred)
         closer_df, closer_arr = mapemb.knn(test_transf)
         mapemb.make_graph(test_data=test_transf, closer_data=closer_arr)
+        return closer_df
 
 def main():
     args = cl_arguments()

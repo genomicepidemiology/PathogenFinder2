@@ -104,6 +104,9 @@ class ConfigurationPF2:
                 else:
                     model_set.set_param(param=k, value=val)
 
+        self.check_incompatible_params()
+
+
     def __str__(self):
         final_dict = self.collect_params()
         out_ = "{"
@@ -111,6 +114,10 @@ class ConfigurationPF2:
             out_ += "\n\t{}: {}".format(k, v)
         out_ += "\n}"
         return out_
+
+    def check_incompatible_params(self):
+        if self.inference_parameters["Multiple Files"] and self.inference_parameters["CGE Output"]:
+            raise TypeError("CGE output can not be used with multiple files as input")
         
     def load_dict_params(self, dict_args):
         if dict_args["outputFolder"]:
@@ -128,6 +135,7 @@ class ConfigurationPF2:
         self.inference_parameters["Multiple Files"] = dict_args["multiFiles"]
         self.inference_parameters["Embeddings"] = dict_args["embeddings"]
         self.inference_parameters["Attentions"] = dict_args["attentions"]
+        self.inference_parameters["CGE Output"] = dict_args["cge"]
         
         self.misc_parameters["Prodigal Path"] = dict_args["prodigalPath"]
         self.misc_parameters["ProtT5 Path"] = dict_args["protT5Path"]
@@ -143,7 +151,7 @@ class ConfigurationPF2:
             weights_path = "%s/../../../data/models_weights/weights_model{}.pickle" % Path(__file__).parent.absolute()
             files_weights = [weights_path.format(1), weights_path.format(2), weights_path.format(3), weights_path.format(4)]
             self.model_parameters["Network Weights"] = files_weights
-
+        self.check_incompatible_params()
 
     def collect_params(self):
         final_dict = {"Misc Parameters": self.misc_parameters,

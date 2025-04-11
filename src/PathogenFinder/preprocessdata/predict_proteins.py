@@ -16,12 +16,13 @@ class Prodigal_EXEC:
         self.output_folder = output_folder
 
 
-    def __call__(self, file_path):
+    def __call__(self, file_path, cge_output=False):
         logging.info("Running Prodigal for file '{}'".format(file_path))
         abs_filepath = os.path.abspath(file_path)
-        seq_name, ext = get_filename(abs_filepath)
-        seq_folder = os.path.dirname(abs_filepath)
-        
+        if cge_output:
+            seq_name = ""
+        else:
+            seq_name, ext = get_filename(abs_filepath)        
         proteome_path = self.run_prodigal(seq_name=seq_name, abs_filepath=abs_filepath)
         return proteome_path
 
@@ -34,7 +35,7 @@ class Prodigal_EXEC:
                                 statsfold=self.output_folder,
                                 seqname=seq_name)
         if aminoacid:
-            aa_name = "{aminofold}/{seqname}_predictedprots.faa".format(
+            aa_name = "{aminofold}/{seqname}PredictedProteins.faa".format(
                                 aminofold=self.output_folder,
                                 seqname=seq_name)
             command += " -a {}".format(aa_name)
