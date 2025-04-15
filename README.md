@@ -61,17 +61,16 @@ deactivate
 #### Install PathogenFinder2
 In order to install the basic functionalities of PathogenFinder2, use:
 ```unix
-pip install .
+pip install -e .
 ```
 
 If you want to use also the mapping functionalities, use:
 ```unix
-pip install .[mapping]
+pip install -e .[mapping]
 ```
 
 ### Installing through Docker (Beta)
-
-The PathogenFinder2 application has been build into a single image on docker hub named "genomicepidemiology/pathogenfinder2". Below is an example run, where the current working directory is bound to the container "/app" path which is the container working directory.
+Soon
 
 ## Test data
 
