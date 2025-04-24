@@ -100,7 +100,7 @@ class MapProteins:
         prot_df = data_diamond[data_diamond["qseqid"]==protID].sort_values(by=['pident'], ascending=False).head(amount_hits)
         if len(prot_df) == 0:
             (ref_id, ref_name, identity, alignment_length, ref_gene_length, coverage,
-                ref_startpos, ref_endpos, query_id, query_start_pos, query_end_pos, taxname, taxid) = [["-"]]*13
+                ref_startpos, ref_endpos, query_id, query_startpos, query_endpos, taxname, taxid) = [["-"]]*13
         else:
             ref_id = prot_df["sseqid"]
             ref_name = prot_df["stitle"]
