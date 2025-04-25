@@ -99,8 +99,10 @@ class MapProteins:
     def analyze_nn_results(self, protID:str, data_diamond:pd.DataFrame, amount_hits:int=1) -> pd.DataFrame:
         prot_df = data_diamond[data_diamond["qseqid"]==protID].sort_values(by=['pident'], ascending=False).head(amount_hits)
         if len(prot_df) == 0:
-            (ref_id, ref_name, identity, alignment_length, ref_gene_length, coverage,
-                ref_startpos, ref_endpos, query_id, query_startpos, query_endpos, taxname, taxid) = [["-"]]*13
+            query_id = protID
+            ref_name = "No Match Found"
+            (ref_id, identity, alignment_length, ref_gene_length, coverage,
+                ref_startpos, ref_endpos, query_startpos, query_endpos, taxname, taxid) = [["-"]]*11
         else:
             ref_id = prot_df["sseqid"]
             ref_name = prot_df["stitle"]
