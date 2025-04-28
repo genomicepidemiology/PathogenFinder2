@@ -183,7 +183,6 @@ class CGEResults:
             
 
     def add_proteinsatt(self, proteins_df):
-        print(proteins_df)
         for n in range(len(proteins_df)):
             entry = proteins_df.iloc[n]
             protein = {}
@@ -208,6 +207,13 @@ class CGEResults:
             else:
                 protein["coverage"] = float(protein["coverage"])
                 protein["identity"] = float(protein["identity"])
+                protein["ref_start_pos"] = int(protein["ref_start_pos"])
+                protein["alignment_length"] = int(protein["alignment_length"])
+                protein["ref_seq_lenght"] = int(protein["ref_seq_lenght"])
+                protein["ref_start_pos"] = int(protein["ref_start_pos"])
+                protein["ref_end_pos"] = int(protein["ref_end_pos"])
+                protein["query_start_pos"] = int(protein["query_start_pos"])
+                protein["query_end_pos"] = int(protein["query_end_pos"])
                 if float(protein["coverage"]) == 100. and float(protein["identity"]) == 100.:
                     protein["grade"] = 3
                 elif float(protein["coverage"]) == 100. and float(protein["identity"]) < 100.:

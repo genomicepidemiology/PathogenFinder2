@@ -104,17 +104,17 @@ class MapProteins:
             (ref_id, identity, alignment_length, ref_gene_length, coverage,
                 ref_startpos, ref_endpos, query_startpos, query_endpos, taxname, taxid) = [["-"]]*11
         else:
-            ref_id = prot_df["sseqid"]
-            ref_name = prot_df["stitle"]
-            identity = prot_df["pident"].astype('float32')
-            alignment_length = prot_df["length"].astype('int32')
-            ref_gene_length = prot_df["slen"].astype('int32')
-            coverage = prot_df["scovhsp"].astype('float32')
-            ref_startpos = prot_df["sstart"].astype('int32')
-            ref_endpos = prot_df["send"].astype('int32')
-            query_id = prot_df["qseqid"]
-            query_startpos = prot_df["qstart"].astype('int32')
-            query_endpos = prot_df["qend"].astype('int32')
+            ref_id = prot_df["sseqid"].item()
+            ref_name = prot_df["stitle"].item()
+            identity = float(prot_df["pident"].item())
+            alignment_length = int(prot_df["length"].item())
+            ref_gene_length = int(prot_df["slen"].item())
+            coverage = float(prot_df["scovhsp"].item())
+            ref_startpos = int(prot_df["sstart"].item())
+            ref_endpos = int(prot_df["send"].item())
+            query_id = prot_df["qseqid"].item()
+            query_startpos = int(prot_df["qstart"].item())
+            query_endpos = int(prot_df["qend"].item())
             taxname = prot_df["stitle"].str.split("Tax").str[1].str.replace("=","")
             taxid = prot_df["stitle"].str.split(" ").str[-2].str.replace("TaxID=","")
         pheno_df = pd.DataFrame({"Ref_ID":ref_id, "Ref_name":ref_name, "Identity":identity, "Alignment_Length": alignment_length,
