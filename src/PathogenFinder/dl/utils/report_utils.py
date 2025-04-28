@@ -189,24 +189,26 @@ class CGEResults:
             protein["key"] = "{}_{}".format(entry["Query_ID"], entry["Ref_ID"])
             protein["gene"] = "Protein"
             protein["name"] = entry["Ref_name"]
-            protein["identity"] = entry["Identity"].item()
-            protein["alignment_length"] = entry["Alignment_Length"].item()
-            protein["ref_seq_lenght"] = entry["Ref_Length"].item()
-            protein["coverage"] = entry["Ref_coverage"].item()
+            protein["identity"] = entry["Identity"]
+            protein["alignment_length"] = entry["Alignment_Length"]
+            protein["ref_seq_lenght"] = entry["Ref_Length"]
+            protein["coverage"] = entry["Ref_coverage"]
             protein["ref_id"] = entry["Ref_ID"]
             protein["ref_acc"] = entry["Ref_ID"]
-            protein["ref_start_pos"] = entry["Ref_start_pos"].item()
-            protein["ref_end_pos"] = entry["Ref_end_pos"].item()
+            protein["ref_start_pos"] = entry["Ref_start_pos"]
+            protein["ref_end_pos"] = entry["Ref_end_pos"]
             protein["query_id"] = entry["Query_ID"]
-            protein["query_start_pos"] = entry["Query_start_pos"].item()
-            protein["query_end_pos"] = entry["Query_end_pos"].item()
+            protein["query_start_pos"] = entry["Query_start_pos"]
+            protein["query_end_pos"] = entry["Query_end_pos"]
             protein["ref_database"] = "UniRef50"
 #            protein["note"] = "Attention Score {}".format(entry["Attention Value"])
-            if protein["coverage"] == 100. and protein["identity"] == 100.:
+            if protein["name"] == "No Match Found":
+                protein["grade"] = -1
+            elif float(protein["coverage"]) == 100. and float(protein["identity"]) == 100.:
                 protein["grade"] = 3
-            elif protein["coverage"] == 100. and protein["identity"] < 100.:
+            elif float(protein["coverage"]) == 100. and float(protein["identity"]) < 100.:
                 protein["grade"] = 2
-            elif protein["coverage"] < 100.:
+            elif float(protein["coverage"]) < 100.:
                 protein["grade"] = 1
             else:
                 protein["grade"] = 0

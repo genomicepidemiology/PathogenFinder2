@@ -81,7 +81,7 @@ class MapProteins:
         data_list = []
         for nn in [0, 1, 2, 3]:
             att_prots = df_att[df_att["NN"]==nn]
-            print(att_prots)
+
             for num in range(len(att_prots)):
                 prot_df = self.analyze_nn_results(att_prots.iloc[num]["ProtIDs"], data_diamond=data_diamond,
                                         amount_hits=amount_hits)
