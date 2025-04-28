@@ -183,6 +183,7 @@ class CGEResults:
             
 
     def add_proteinsatt(self, proteins_df):
+        print(proteins_df)
         for n in range(len(proteins_df)):
             entry = proteins_df.iloc[n]
             protein = {}
@@ -204,14 +205,17 @@ class CGEResults:
 #            protein["note"] = "Attention Score {}".format(entry["Attention Value"])
             if protein["name"] == "No Match Found":
                 protein["grade"] = -1
-            elif float(protein["coverage"]) == 100. and float(protein["identity"]) == 100.:
-                protein["grade"] = 3
-            elif float(protein["coverage"]) == 100. and float(protein["identity"]) < 100.:
-                protein["grade"] = 2
-            elif float(protein["coverage"]) < 100.:
-                protein["grade"] = 1
             else:
-                protein["grade"] = 0
+                protein["coverage"] = float(protein["coverage"])
+                protein["identity"] = float(protein["identity"])
+                if float(protein["coverage"]) == 100. and float(protein["identity"]) == 100.:
+                    protein["grade"] = 3
+                elif float(protein["coverage"]) == 100. and float(protein["identity"]) < 100.:
+                    protein["grade"] = 2
+                elif float(protein["coverage"]) < 100.:
+                    protein["grade"] = 1
+                else:
+                    protein["grade"] = 0
 
             self.proteins_results.append(protein)
 
@@ -224,6 +228,7 @@ class CGEResults:
             results["pathogenic_neighbors"] = self.neighbors_results
         if len(self.proteins_results) > 0:
             results["protein_results"] = self.proteins_results
+        print(results)
         with open("{}/cge_output.json".format(output_path), 'w') as f:
             json.dump(results, f)
 
