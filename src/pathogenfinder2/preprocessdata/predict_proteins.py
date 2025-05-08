@@ -48,7 +48,7 @@ class Prodigal_Executable:
     
         outstd, errstd =  self.write_stderrout(output=output, err=err)
 
-        return prot_file, gbk_file, stats_file, outstd, errstd
+        return prot_file, gbk_file, stats_file, outstd, errstd, " ".join(command)
 
     def write_stderrout(self, output, err):
         outstd_file = "{statsfold}/prodigal.out".format(statsfold=self.log_folder)
@@ -58,3 +58,12 @@ class Prodigal_Executable:
         with open(errstd_file, "wb") as errfile:
             errfile.write(err)
         return outstd_file, errstd_file
+
+    @staticmethod
+    def count_proteins(prot_file):
+        amount_prots = 0
+        with open(prot_file, "r") as pf:
+            for line in pf.readlines():
+                if line.startswith(">"):
+                    amount_prots += 1
+        return amount_prots

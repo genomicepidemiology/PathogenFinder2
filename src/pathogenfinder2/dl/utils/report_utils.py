@@ -306,11 +306,11 @@ class File_Report:
         self.dict_file = "{}/{}".format(dict_dir, name)
         self.data = {}
         self.data["Configuration"] = configuration
-        if "train" in modes:
+        if modes == "Train":
             self.data["Train"] = {}
-        elif "prediction" in modes:
+        elif modes == "Prediction":
             self.data["Prediction"] = {}
-        elif "test" in modes:
+        elif modes == "Test":
             self.data["Test"] = {}
 
     def add_epoch_info(self, log_results):

@@ -86,9 +86,9 @@ class Pathogen_DLModel:
 
 
     def train_model(self, train_parameters):
-
+        print(self.misc_parameters)
         network_module = Network_Module(model_type=self.model_type,
-                                        out_folder=self.misc_parameters["Results Folder"]["main"],
+                                        out_folder=self.misc_parameters["Results Folder"],
                                         model_parameters=self.model_parameters,
                                         mixed_precision=self.model_parameters["Mixed Precision"],
                                         results_module=self.reportNN,
@@ -120,22 +120,22 @@ class Pathogen_DLModel:
             model_params = None
         
         if model_params is None:
-            train_instance.set_optimizer(optimizer_class=train_parameters["Optimizer Parameters"]["optimizer"],
-                                        learning_rate=train_parameters["Optimizer Parameters"]["learning_rate"],
-                                        weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
-                                        amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
-                                        warmup_period=train_parameters["Optimizer Parameters"]["warm_up"],
+            train_instance.set_optimizer(optimizer_class=train_parameters["Optimizer"],
+                                        learning_rate=train_parameters["Learning Rate"],
+                                        weight_decay=train_parameters["Weight Decay"],
+                                        amsgrad=False, scheduler_type=train_parameters["Lr Scheduler"],
+                                        warmup_period=train_parameters["Warm Up"],
                                         patience=None, milestones=None, gamma=None, end_lr=None,
                                         epochs=train_parameters["Epochs"])
         else:
             train_instance.set_optimizer(optimizer=optimizer["Optimizer"],
                                         learning_rate=optimizer["Optimizer"].param_groups[-1]['lr'],
-                                        weight_decay=train_parameters["Optimizer Parameters"]["weight_decay"],
-                                        amsgrad=False, scheduler_type=train_parameters["Optimizer Parameters"]["lr_scheduler"],
+                                        weight_decay=train_parameters["Weight Decay"],
+                                        amsgrad=False, scheduler_type=train_parameters["Lr Scheduler"],
                                         warmup_period=False,
                                         patience=None, milestones=None, gamma=None, end_lr=None,
                                         epochs=train_parameters["Epochs"])
-
+        print(train_parameters["Epochs"])
         train_instance(epochs=train_parameters["Epochs"], model_params=model_params)
 
     def test_model(self, predicted_data, test_parameters):
@@ -185,8 +185,11 @@ class Pathogen_DLModel:
             if not ensemble_results:
                 ensemble_results = {}
                 for i, j in results_inference.items():
-                    fullname = input_metadata.loc[input_metadata["File_Embedding"]==i, "Input_Files"].values[0]
-                    name = os.path.basename(fullname)
+                    if len(results_inference) > 1:
+                        fullname = input_metadata.loc[input_metadata["File_Embedding"]==i, "Input_Files"].values[0]
+                        name = os.path.basename(fullname)
+                    else:
+                        name = "PF2"
                     ensemble_results[name] = {"Output":{}, "Features":{}}
                     ensemble_results[name]["Features"]["Filepath"] = j["Features"]["Filename"]
                     ensemble_results[name]["Features"]["Proteome Length"] = j["Features"]["Proteome Length"]
@@ -196,8 +199,11 @@ class Pathogen_DLModel:
                         ensemble_results[name]["Output"][io] = jo
             else:
                 for i, j in results_inference.items():
-                    fullname = input_metadata.loc[input_metadata["File_Embedding"]==i, "Input_Files"].values[0]
-                    name = os.path.basename(fullname)
+                    if len(results_inference) > 1:
+                        fullname = input_metadata.loc[input_metadata["File_Embedding"]==i, "Input_Files"].values[0]
+                        name = os.path.basename(fullname)
+                    else:
+                        name = "PF2"
                     for io, jo in j["Output"].items():
                         if io == "Prediction":
                             ensemble_results[name]["Output"][io].extend(jo)

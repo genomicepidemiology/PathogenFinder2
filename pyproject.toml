@@ -49,4 +49,12 @@ source = "file"
 path = "src/PathogenFinder/__init__.py"
 
 [tool.setuptools]
-#Fille
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mypkg = ["*.json",
+          "*.npz",
+          "*.pickle"]

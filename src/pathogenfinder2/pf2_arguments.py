@@ -10,8 +10,6 @@ def check_arguments(argum):
                                 """please use --dbProteins to point to the diamond indexed database"""))
         if not argum.inputFile and not argum.multipleFiles:
             raise ValueError(("""Argument -i/--inputFile or --multiFiles are required when predicting with pathogenfinder2"""))
-        if argum.cge and argum.multipleFiles:
-            raise ValueError(("""Only individual sequences can produce a cge output"""))
        
 
 
@@ -77,26 +75,23 @@ def pf2_arguments():
                                         parents=[parent_parser])
     train_parser.set_defaults(action="Train")
 
-    test_parser = subparsers.add_parser("test",
-                                        help="Test the PathogenFinder2 model for  bacterial pathogenic capacity using your own data",
-                                        parents=[parent_parser])
-    test_parser.set_defaults(action="Test")
-
-
     infer_parser = subparsers.add_parser("infere_proteomeLM",
                                         help="Predict the protein content and create its embeddings with Prodigal and protT5",
                                         parents=[parent_parser])
     infer_parser.set_defaults(action="Infere")
+    infer_parser.add_argument("-i", "--inputFile", help=("""Path to genome file to predict its protein content and create embeddings."""),
+                                                        default=False)
+    infer_parser.add_argument("--multipleFiles", help=("""Path to text file with paths to input files."""), default=False)  
 
-    align_parser = subparsers.add_parser("align_proteins",
-                                        help="Align the protein content to the protein database of interest",
-                                        parents=[parent_parser])
-    align_parser.set_defaults(action="Align_Proteins")
-
-    mapembed_parser = subparsers.add_parser("map_embedding",
-                                        help="Map the genome embedding to the Pathogenic Bacterial Landscape",
-                                        parents=[parent_parser])
-    mapembed_parser.set_defaults(action="Map_Embeddings")
+#    align_parser = subparsers.add_parser("align_proteins",
+ #                                       help="Align the protein content to the protein database of interest",
+  #                                      parents=[parent_parser])
+   # align_parser.set_defaults(action="Align_Proteins")
+#
+ #   mapembed_parser = subparsers.add_parser("map_embedding",
+  #                                      help="Map the genome embedding to the Pathogenic Bacterial Landscape",
+   #                                     parents=[parent_parser])
+    #mapembed_parser.set_defaults(action="Map_Embeddings")
 
     argums = parser.parse_args()
     check_arguments(argums)

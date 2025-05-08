@@ -35,8 +35,6 @@ class Network_Module:
         else:
             self.loss_function = torch.nn.modules.loss.BCELoss
 
-        
-
     def calculate_loss(self, predictions_logit, labels):
         predictions = torch.sigmoid(predictions_logit)
         if self.loss_type == "bce":
@@ -44,7 +42,7 @@ class Network_Module:
         elif self.loss_type == "bcelogits":
             loss = self.loss_function(predictions_logit, labels)
         else:
-            raise KeyError("The loss function {} is not available".format(self.loss))
+            raise KeyError("The loss function {} is not available".format(self.loss_type))
         return predictions, loss
 
     def load_weights(self, weights):
