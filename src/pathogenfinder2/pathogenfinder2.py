@@ -89,7 +89,8 @@ class PathogenFinder2_Main:
             closer_df, closer_arr = mapemb.knn(test_transf)
             mapemb.make_graph(test_data=test_transf, closer_data=closer_arr)
             closer_dfs[base_seq] = closer_df
-            self.cge_results[base_seq].add_bacterialneighbors(query_id=base_seq, neighbors_df=closer_df)
+            if self.cge_results:
+                self.cge_results[base_seq].add_bacterialneighbors(query_id=base_seq, neighbors_df=closer_df)
         return closer_dfs
     
     def map_attentions(self, db_path:str, diamond_path:str="diamond",
@@ -197,9 +198,9 @@ class PathogenFinder2_Main:
                     if success_proteins[base_seq] != "Success":
                         summary = "Failed"
                     else:
-                        summary = "Prediciton: {}".format(ensemble_results[base_seq]["Phenotype"])
+                        summary = "Prediciton: {}".format(ensemble_results[base_seq]["Ensemble Predictions"]["Phenotype"])
                 else:
-                    summary = "Prediciton: {}".format(ensemble_results[base_seq]["Phenotype"])
+                    summary = "Prediciton: {}".format(ensemble_results[base_seq]["Ensemble Predictions"]["Phenotype"].item())
 
                 self.cge_results[base_seq].add_log(summary, log=success_proteins[base_seq])
                 
