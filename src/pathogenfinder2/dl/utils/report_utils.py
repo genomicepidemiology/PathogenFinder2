@@ -144,7 +144,7 @@ class CGEResults:
         self.software_result["run_id"] = ""
         self.software_result["run_date"] = ""
         self.software_result["phenotypes"] = ""
-        self.software_result["software_exections"] = {}
+        self.software_result["software_executions"] = {}
         
     def add_phenotype_result(self, results_ensemble):
         self.phenotype_result["type"] = "phenotype_ml"

@@ -104,7 +104,7 @@ class CGEResults:
         self.software_result["phenotypes_ml"] = {}
         self.software_result["seq_regions"] = {}
         self.software_result["neighbors"] = {}
-        self.software_result["software_exections"] = {}
+        self.software_result["software_executions"] = {}
         self.software_result["databases"] = {}
 
     def add_log(self, result_summary, log):
@@ -124,7 +124,7 @@ class CGEResults:
         software_exec["parameters"] = parameters
         software_exec["stdout"] = stdout
         software_exec["stderr"] = stderr
-        self.software_result["software_exections"][software_exec["key"]] = software_exec
+        self.software_result["software_executions"][software_exec["key"]] = software_exec
 
     def add_database(self, name, version, commit=""):
         database = {}
