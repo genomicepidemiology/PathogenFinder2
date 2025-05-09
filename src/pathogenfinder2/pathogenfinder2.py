@@ -52,7 +52,7 @@ class PathogenFinder2_Main:
 
             if self.cge_results:
                 self.cge_results[baseseq].add_software_exec(software_name="Prodigal", command=command,
-                                        stdout=outstd, stderr=errstd, parameters={})
+                                            stdout=outstd, stderr=errstd, parameters={"inputfile": input_seq})
         return success_prediction
             
     def infere_embeddings(self, success_proteins:dict=False, model_path:str=None,

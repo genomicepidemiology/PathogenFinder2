@@ -117,8 +117,9 @@ class CGEResults:
         # TODO
         software_exec = {}
         software_exec["type"] = "software_exec"
-        software_exec["key"] = "{}_{}".format(software_name,
-                                                    hashlib.md5(str(parameters).encode()).hexdigest())
+        software_exec["key"] = "{}".format(software_name)
+ #       software_exec["key"] = "{}_{}".format(software_name,
+  #                                                  hashlib.md5(str(parameters).encode()).hexdigest())
         software_exec["software_name"] = software_name
         software_exec["command"] = command
         software_exec["parameters"] = parameters
