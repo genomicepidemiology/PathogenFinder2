@@ -15,7 +15,7 @@ from pathogenfinder2.dl.model import Pathogen_DLModel
 
 class PathogenFinder2_Main:
 
-    MODES = ["Align_Proteins", "Map_Embeddings", "Prediction", "Train", "Test", "Infere"]
+    MODES = ["Align_Proteins", "Map_Embeddings", "Prediction", "Train", "Test", "Infer"]
 
     def __init__(self, mode:str, outPath:str, configuration_file:[str, dict, bool]=False) -> None:
         if mode not in PathogenFinder2_Main.MODES:
@@ -254,7 +254,7 @@ def main():
             pathogenfinder2_main.train()
         elif args.action == "Test":
             pass
-        elif args.action == "Infere":
+        elif args.action == "Infer":
             pathogenfinder2_main.infere(input_file=args.inputFile,  multi_file=args.multipleFiles,
                                         prodigal_path=args.prodigalPath)
         else:

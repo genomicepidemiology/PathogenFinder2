@@ -75,10 +75,10 @@ def pf2_arguments():
                                         parents=[parent_parser])
     train_parser.set_defaults(action="Train")
 
-    infer_parser = subparsers.add_parser("infere_proteomeLM",
+    infer_parser = subparsers.add_parser("infer_proteomeLM",
                                         help="Predict the protein content and create its embeddings with Prodigal and protT5",
                                         parents=[parent_parser])
-    infer_parser.set_defaults(action="Infere")
+    infer_parser.set_defaults(action="Infer")
     infer_parser.add_argument("-i", "--inputFile", help=("""Path to genome file to predict its protein content and create embeddings."""),
                                                         default=False)
     infer_parser.add_argument("--multipleFiles", help=("""Path to text file with paths to input files."""), default=False)  
