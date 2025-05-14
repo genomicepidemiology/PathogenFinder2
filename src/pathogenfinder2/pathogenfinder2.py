@@ -41,9 +41,9 @@ class PathogenFinder2_Main:
                     outstd, errstd, command) = prodigal_exec(input_seq, prot_file=protein_file)
             amount_prots = Prodigal_Executable.count_proteins(prot_file)
             if amount_prots == 0:
-                success_prediction[baseseq] = "ERROR: No proteins were predicted in the file {}".format(input_seq)
+                success_prediction[baseseq] = "ERROR: No proteins were predicted in the file {}".format(os.path.basename(input_seq))
             elif amount_prots > 14000:
-                success_prediction[baseseq] = "ERROR: More than 14000 were predicted in the file {}, which is an amount beyond bacterial sizes.".format(input_seq)
+                success_prediction[baseseq] = "ERROR: More than 14000 were predicted in the file {}, which is an amount beyond bacterial sizes.".format(os.path.basename(input_seq))
             else:
                 success_prediction[baseseq] = "Success"
             

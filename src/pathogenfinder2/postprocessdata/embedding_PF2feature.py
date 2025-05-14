@@ -44,7 +44,7 @@ class MapEmbeddings:
         closer_arr = np.squeeze(self.train_data[indices])
         return closer_df, closer_arr
 
-    def make_graph(self, test_data:np.array, closer_data, add_sp=True):
+    def make_graph(self, test_data:np.array, closer_data, add_sp=False):
         custom_params = {"axes.spines.right": False, "axes.spines.top": False}
         sns.set_theme(style="ticks", rc=custom_params)
         fig, ax = plt.subplots()

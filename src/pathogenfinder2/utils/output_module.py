@@ -140,8 +140,9 @@ class CGEResults:
     def add_phenotype_result(self, results_ensemble):
         phenotype_result = {}
         phenotype_result["type"] = "phenotype_ml"
-        phenotype_result["key"] = "human-bacterial-pathogenicity_{}".format(
-                                        hashlib.md5(str(results_ensemble).encode()).hexdigest())
+        #phenotype_result["key"] = "human-bacterial-pathogenicity_{}".format(
+         #                               hashlib.md5(str(results_ensemble).encode()).hexdigest())
+        phenotype_result["key"] = "human_bacterial_pathogenicity"
         phenotype_result["category"] = "Pathogenicity"
         phenotype_result["ensemble_pred"] = True
         phenotype_result["type_pred"] = "Categorical"
@@ -175,7 +176,7 @@ class CGEResults:
             neighbor["ref_strain"] = entry["Strain"]
             neighbor["software"] = "Scikit-learn"
             neighbor["rank_neighbors"] = str(n)
-            self.software_result["neighbors"][neighbor["type"]] = neighbor
+            self.software_result["neighbors"][neighbor["key"]] = neighbor
             
 
     def add_proteinsatt(self, proteins_df, ref_db):

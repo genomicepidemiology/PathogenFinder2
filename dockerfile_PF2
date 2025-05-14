@@ -21,9 +21,8 @@ WORKDIR /app
 RUN cd /; mkdir pathogenfinder2
 ADD .. /pathogenfinder2
 #RUN gunzip /pathogenfinder2/data/embeddings_BPL/embeddings.npz.gz
-RUN cd /pathogenfinder2; pip install -e .[mapping]
+RUN cd /pathogenfinder2; pip install .[mapping]
 
-#RUN pip install -e .[mapping]
 
 # Execute program when running the container
 ENTRYPOINT ["pathogenfinder2"]
