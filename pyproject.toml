@@ -29,8 +29,10 @@ classifiers = [
 readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["deep learning", "epidemiology", "microbiology"]
+
 [project.optional-dependencies]
 mapping = ["umap-learn==0.5.4", "seaborn"]
+
 [project.urls]
 Homepage = "https://example.com"
 Documentation = "https://readthedocs.org"
@@ -39,8 +41,20 @@ Issues = "https://github.com/genomicepidemiology/PathogenFinder/issues"
 Changelog = "https://github.com/genomicepidemiology/PathogenFinder/blob/master/CHANGELOG.md"
 
 [project.scripts]
-pathogenfinder2 = "PathogenFinder.pathogenfinder2:main"
-pathogenfinder2_mapping = "PathogenFinder.pathogenfinder2_mapping:main"
+pathogenfinder2 = "pathogenfinder2.pathogenfinder2:main"
+pathogenfinder2_mapping = "pathogenfinder2.pathogenfinder2_mapping:main"
+
+[tool.pdm.version]
+source = "file"
+path = "src/PathogenFinder/__init__.py"
 
 [tool.setuptools]
-#Fille
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mypkg = ["*.json",
+          "*.npz",
+          "*.pickle"]
