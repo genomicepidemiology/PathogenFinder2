@@ -71,12 +71,12 @@
 	"Save Model": "best_epoch",
         "Prot Dim Split": false,
         "Loss Function": "BCEWithLogitsLoss",
-        "Train DF": "/work3/alff/PathogenFinder_db/metadatatest_train.tsv",
-        "Train Loc": "/work3/alff/PathogenFinder_db",
-        "Validation DF": "/work3/alff/PathogenFinder_db/metadatatest_val.tsv",
-        "Validation Loc": "/work3/alff/PathogenFinder_db",
+        "Train DF": "/path/to/metadata_train.tsv",
+        "Train Loc": "/path/to/folder_with_data/",
+        "Validation DF": "/path/to/metadata_val.tsv",
+        "Validation Loc": "/path/to/folder_with_data/",
         "Train Results": "dictionary",
         "Memory Report": false,
         "Wandb Report": false,
-        "Results dir": "/work3/alff/PathogenFinder_dev/test_train"}
+        "Results dir": "/path/to/folderoutput/"}
 }
