@@ -10,7 +10,7 @@ If you are installing through Pip, the dependencies of external software and opt
 
 Go to the location where you want to store your environment.
 ```unix
-# Create environment
+# Create environment. PathogenFinder2 requires a Python version equal or newer than 3.10
 python3 -m venv pathogenfinder2_env
 
 # Activate environment
@@ -41,6 +41,7 @@ In order to install Prodigal, you can follow the instructions described in its [
 git clone https://github.com/hyattpd/Prodigal
 cd Prodigal/
 make
+cd ..
 ```
 This will produce an executable that you can save wherever you prefer, and indicate to pathogenfinder2 through the commandline where it is located.
 
@@ -52,13 +53,9 @@ tar xzf diamond-linux64.tar.gz
 ```
 
 #### Protein Database (UniRef50) (Optional)
-The recommended protein database for aligning the highlighted proteins to is UniRef50. To download the database and format it for Diamond, follow the next steps:
+The recommended protein database for aligning the highlighted proteins to is UniRef50. To download the database and format it for Diamond, follow the next steps. Please notice that "/path/to" means the path where that file is located, as PathogenFinder2 is flexible enough to allow you to place the file where is necessary:
 ```unix
 wget https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref50/uniref50.fasta.gz
 gunzip uniref50.fasta.gz
-/path/to/diamond makedb --in uniref50.fasta -d uniref50
+/path/to/diamond makedb --in /path/to/uniref50.fasta -d /path/to/uniref50
 ```
-
-### Installing through Docker (Beta)
-
-The PathogenFinder2 application has been build into a single image on docker hub named "genomicepidemiology/pathogenfinder2". Below is an example run, where the current working directory is bound to the container "/app" path which is the container working directory.

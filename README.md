@@ -18,7 +18,10 @@ Besides, PathogenFinder2 has extra functionalities when predicting the pathogeni
 ## Installation
 For installation, please follow the description in this [link](./docs/images/Installation.md)
 
-## Usage
+## Test usage
+For a test/demo usage, please follow the description and explanation of outputs in this [link](./docs/Test.md)
+
+## General Usage
 **Important**: Any of the modes of the main module will improve its speed notably if used on a computer with GPU available. In particular, the steps infering the embeddings of each protein (using protT5) and the neural network to predict pathogenic capacity. The step for predicting the protein content, as well as mapping the embeddings or the proteins to a database (mapping submodule) will always run on CPUs.
 
 
@@ -99,28 +102,6 @@ Executable paths:
 ```
 If the options **--embedProteome** or **--attProteins** are used with *map* or *align*, respectively, the submodule *mapping* from PathogenFinder2 will be used (details on the [Installation](./docs/images/Installation.md) section) 
 
-#### Results files:
-The output folder will contain different folders containing the prediction and other products produced during the inference.
-* *config* folder: Contains the configurations and inputs used by PathogenFinder2
-* *Name of the sample* folder: Contains the results of from PathogenFinder2:
-    * *preprocess*: will contain files produced during protein prediction and protein embedding.
-    * *postprocess*: (Only when the embeddings and/or the attentions are being mapped) will contain files produced during the mapping of proteins of interests to the protein database.
-    * *log*: Will contain the stdout and stderr of programs executed during the run of PathogenFinder2 (as for Prodigal or Diamond)
-    * *out*: will contain the result files from PathogenFinder2:
-        * *predictions.tsv*: the predictions of the PathogenFinder2 model on pathogenic capacity.
-        * *embeddings.npz*: the embeddings defining the genomic sequence. Only produced if --embeddings is used.
-        * *attentions.npz*: the attention score values per protein. Only produced if --attentions is used.
-        * *closeneighbors_metadata.tsv*: the metadata of the 10 closer pathogens to the sequence analyzed. Only produced if --embeddings is used with "map".
-        * *mapped_bpl.png*: the Bacterial Pathogenic Landscape with the location of the sequence analyzed. Only produced if --embeddings is used with "map".
-        * *mapped_proteins.tsv*: hits of the top proteins highlighted by the attentions score on the UniRef50 database. Only produced if --attentions is used with "map".
-        * *cge_out.json*: results in the cge format. Only produced if --cge is used.
-
-#### Example
-```unix
-pathogenfinder2 predict -i test/data/GCF_000014385.1_ASM1438v1_genomic.fna.gz -f genome -o test/out --prodigalPath path/to/prodigal --embeddings report --attentions report
-```
-If running multiple files, use the "--multipleFiles" options, where the file pointed to has the absolutepaths to each file in each line. 
-
 
 ### Train 
 For training, the different options (such as epoch count, file path, etc) must be indicated by the json file format. The input data must also be already embeddings files produced with protT5 (or with the function "Infer Protein Embeddings", as described below).
@@ -185,11 +166,8 @@ Executable paths:
                         Path to Diamond executable
 ```
 
-## PathogenFinder2 Dataset
-The PathogenFinder2 Dataset can be accessed in its [repository](https://github.com/genomicepidemiology/PathogenFinder2_DB), or by recursively cloning this repository:
-```unix
-git clone --recursive https://github.com/genomicepidemiology/PathogenFinder2
-```
+## PathogenFinder2 Data
+For more information about the dataset used for training and evaluating the model, please follow the [link](./docs/DataPF2.md) describing the folder *data/PF2_data*.
 
 ## Citation
 When using the method please cite:

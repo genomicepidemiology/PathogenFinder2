@@ -47,7 +47,7 @@ class Prediction_Report:
                 pp.write("# Results From PathogenFinder2\n")
                 pp.write("## 'File Name' has the input file, 'Prediction_0-3' has the predictions of each neural network,")
                 pp.write(" 'Prediction Mean' has the mean of the 4 neural networks, 'Prediction_STD' has the standard deviation ")
-                pp.write("of the four predictions,\n'Phenotype' has if the prediction is pathogenic or non pathogenic, and ")
+                pp.write("of the four predictions,\n## 'Phenotype' has if the prediction is pathogenic or non pathogenic, and ")
                 pp.write("'Binary Prediction Mean' has the value of the prediction as 0 (non pathogenic) or 1 (pathogenic).\n")            
             df_results.to_csv(pred_path, sep="\t", index=False, mode="a")
             predictions_paths.append(pred_path)
