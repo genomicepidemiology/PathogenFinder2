@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PathogenFinder2"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = ["pandas >= 2.2.2", "accelerate",
 		"matplotlib", "scikit-learn", "torch >= 2.3.1",
 	        "tqdm", "h5py","sentencepiece",

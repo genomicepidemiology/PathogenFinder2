@@ -11,7 +11,7 @@ pathogenfinder2 predict -i test/data/GCF_000014385.1_ASM1438v1_genomic.fna -f ge
 
 If you want the complete mode (with Pathogenic Bacterial Landscape and Proteins of Interest):
 ```unix
-pathogenfinder2 predict -i test/data/GCF_000014385.1_ASM1438v1_genomic.fna.gz -f genome -o /path/to/outputfolder --prodigalPath /path/to/prodigal --embedProteome map --attProteins align --dbProteins /path/to/uniref50 --diamondPath /path/to/diamond
+pathogenfinder2 predict -i test/data/GCF_000014385.1_ASM1438v1_genomic.fna -f genome -o /path/to/outputfolder --prodigalPath /path/to/prodigal --embedProteome map --attProteins align --dbProteins /path/to/uniref50 --diamondPath /path/to/diamond
 ```
 *Expecting you are located in the main folder of the repository.*
 

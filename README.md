@@ -16,7 +16,7 @@ The deep neural model is an ensemble of 4 neural networks that have beent traine
 Besides, PathogenFinder2 has extra functionalities when predicting the pathogenic capacity, as mapping those embeddings to the Bacterial Pathogenic Landscape, as well as to align with DIAMOND [2] the top proteins highlighted by the attention layer to a protein database (UniRef50 [3]).
 
 ## Installation
-For installation, please follow the description in this [link](./docs/images/Installation.md)
+For installation, please follow the description in this [link](./docs/Installation.md)
 
 ## Test usage
 For a test/demo usage, please follow the description and explanation of outputs in this [link](./docs/Test.md)
