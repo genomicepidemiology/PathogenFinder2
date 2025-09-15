@@ -168,7 +168,7 @@ class CGEResults:
             neighbor["ref_acc"] = entry["RefSeq"]
             neighbor["distance_measure"] = "minkowski"
             neighbor["distance_value"] = entry["Distances"].item()
-            neighbor["ref_database"] = "PathogenFinder2"
+            neighbor["ref_database"] = ["PathogenFinder2"]
             neighbor["type_sequence"] = "Proteome"
             neighbor["type_compared"] = "PF2_Embedding"
             neighbor["ref_taxID"] = entry["Taxonomy"].item()
@@ -190,7 +190,7 @@ class CGEResults:
             protein["name"] = entry["Ref_name"]
             protein["identity"] = entry["Identity"]
             protein["alignment_length"] = entry["Alignment_Length"]
-            protein["ref_seq_lenght"] = entry["Ref_Length"]
+            protein["ref_seq_length"] = entry["Ref_Length"]
             protein["coverage"] = entry["Ref_coverage"]
             protein["ref_id"] = entry["Ref_ID"]
             protein["ref_acc"] = entry["Ref_ID"]
@@ -199,7 +199,7 @@ class CGEResults:
             protein["query_id"] = entry["Query_ID"]
             protein["query_start_pos"] = entry["Query_start_pos"]
             protein["query_end_pos"] = entry["Query_end_pos"]
-            protein["ref_database"] = "UniRef50"
+            protein["ref_database"] = ["UniRef50"]
 #            protein["note"] = "Attention Score {}".format(entry["Attention Value"])
             if protein["name"] == "No Match Found":
                 protein["grade"] = -1
@@ -208,7 +208,7 @@ class CGEResults:
                 protein["identity"] = float(protein["identity"])
                 protein["ref_start_pos"] = int(protein["ref_start_pos"])
                 protein["alignment_length"] = int(protein["alignment_length"])
-                protein["ref_seq_lenght"] = int(protein["ref_seq_lenght"])
+                protein["ref_seq_length"] = int(protein["ref_seq_length"])
                 protein["ref_start_pos"] = int(protein["ref_start_pos"])
                 protein["ref_end_pos"] = int(protein["ref_end_pos"])
                 protein["query_start_pos"] = int(protein["query_start_pos"])

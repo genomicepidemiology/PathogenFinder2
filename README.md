@@ -1,7 +1,7 @@
 # PathogenFinder2
 Prediction of bacterial pathogenic capacity on humans with protein Language Models.
 
-This repository contains the code to run PathogenFinder2 through the commandline. If prefered, the program can also be runned (only for prediction) through its [webpage](https://cge.food.dtu.dk/services/PathogenFinder2/). PathogenFinder2 consists of a main package (pathogenfinder2) that predicts the pathogenic capacity of a bacterial genome. The prediction is made through four steps:
+This repository contains the code to run PathogenFinder2 through the commandline. If prefered, the program can also be runned (only for prediction) through its [webpage](https://genepi.food.dtu.dk/pathogenfinder). PathogenFinder2 consists of a main package (pathogenfinder2) that predicts the pathogenic capacity of a bacterial genome. The prediction is made through four steps:
 1. Protein prediction: PathogenFinder2 uses Prodigal[1] to predict the protein content of the bacterial genome
 2. Protein Embedding production: PathogenFinder2 uses ProtT5 to embed each protein into a vector.
 3. Concat embeddings: Each vector is stacked in the same order as the proteins appear in the Prodigal prediction.
