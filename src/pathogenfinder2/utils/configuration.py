@@ -47,7 +47,6 @@ class ConfigurationPF2(UserDict):
 
 
     def load_user_config(self, user_config):
-        print(user_config)
         if isinstance(user_config, str):
             with open(user_config) as f:
                 config_dict = json.load(f)

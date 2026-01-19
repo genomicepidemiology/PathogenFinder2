@@ -8,7 +8,7 @@
         "Report Results": "file",
         "Project Name": "PathogenFinder2",
 	"Prodigal Path": "prodigal",
-	"protT5 Path": "protT5",
+	"protT5 Path": null,
 	"Diamond Path": "diamond"
         },
 "I/O Parameters":{

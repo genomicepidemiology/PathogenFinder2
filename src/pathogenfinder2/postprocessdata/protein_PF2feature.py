@@ -7,10 +7,14 @@ import os
 class MapProteins:
 
     def __init__(self, folder_out:str, db_path:str, diamond_path:str, folder_tmp:str=None):
-        self.folder_out = folder_out
+
         self.db_path = db_path
         self.diamond_path = diamond_path
-        self.folder_tmp = folder_tmp
+        self.folder_out = folder_out
+        if folder_tmp == None:
+            self.folder_tmp = folder_out
+        else:
+            self.folder_tmp = folder_tmp
 
     @staticmethod
     def read_protfasta(file_path:str) -> dict:
@@ -31,7 +35,44 @@ class MapProteins:
                 file_write.write(">{}\n".format(protid))
                 file_write.write("{}\n".format(protseq))
 
-    def read_attentionfile(self, att_file:str, prot_file:str, num_prot:int=20) -> (str,str):
+    @staticmethod
+    def load_attfile(attfile, combine_max=True, top_values=None):
+        attnp = np.load(attfile,  allow_pickle=True)
+        attdf["att0"] = attnp["attentions"][0,:]*len(attnp["attentions"][0,:])
+        attdf["att1"] = attnp["attentions"][1,:]*len(attnp["attentions"][1,:])
+        attdf["att2"] = attnp["attentions"][2,:]*len(attnp["attentions"][2,:])
+        attdf["att3"] = attnp["attentions"][3,:]*len(attnp["attentions"][3,:])
+        attdf['protIDs'] = attdf['protein_id'].apply(lambda x: x.decode() if isinstance(x, bytes) else x)
+        attdf["protIDs"] = attdf["protIDs"].str.split(" # ").str[0]
+        if combine_max:
+            attdf["attmax"] = attdf[["att0", "att1", "att2", "att3"]].max(axis=1)
+        else:
+            attsort = np.argsort(attdf[["att0", "att1", "att2", "att3"]], axis=1)
+            attsort_top = np.unique(attsort[:, top_values])
+            attdf["top"] = np.zeros(len(attdf["att0"]), dtype=bool)
+            attdf[attsort_top] = True
+        return attdf
+
+    @staticmethod
+    def load_alnfile(alnfile):
+        data_diamond = pd.read_csv(infile, sep="\t", names=["qseqid","sseqid","pident","length","mismatch","gapopen","qstart","qend",
+                                                                "sstart","send","evalue","bitscore","qtitle","stitle", "scovhsp", "slen"])
+        return data_diamond
+
+    @staticmethod
+    def load_fsafile(file_path:str) -> dict:
+        dict_prots = {}
+        with open(file_path, "r") as file_read:
+            for line in file_read:
+                if line.startswith(">"):
+                    id_prot = line.rstrip()[1:].split()[0]
+                    dict_prots[id_prot] = ""
+                else:
+                    dict_prots[id_prot] += line.rstrip()
+        return dict_prots
+
+
+    def read_attentionfile_old(self, att_file:str, prot_file:str, num_prot:int=20) -> (str,str):
         att_data = np.load("{}".format(att_file), allow_pickle=True)
         att = att_data["attentions"]
         protids = att_data["protIDs"]
@@ -124,15 +165,20 @@ class MapProteins:
 
 def get_args():
     parser = argparse.ArgumentParser(description='Mapping your sequence to the Bacterial Pathogenic Landscape')
+    ## GENERAL ##
     parser.add_argument('--diamond_path', help='Diamond path')
     parser.add_argument('--db_path', help='Diamond formatted db path', required=True)
     parser.add_argument('--prot_path', help='Path to protein fasta file')
     parser.add_argument('--att_path', help='Path to attention npz file')
     parser.add_argument('--log_folder', help='Folder for the logs of diamond')
-    parser.add_argument('--amount_hits', help="Amount of hits reported", default=1)
-    parser.add_argument('--amount_prots', help="Amount of proteins reported", default=20)
     parser.add_argument("--out_folder", help='Folder where to output results', required=True)
     parser.add_argument("--tmp_folder", help="Folder where to output temporary files", default=None)
+    #############
+    parser.add_argument("--aln_top_genes", help="Align top genes")
+    parser.add_argument('--amount_hits', help="Amount of hits reported", default=1)
+    parser.add_argument('--amount_prots', help="Amount of proteins reported", default=20)
+    ############
+    parser.add_argument("--gsea", help="Perform GSEA")
     return parser.parse_args()
 
 def main():
@@ -151,5 +197,5 @@ def main():
 
 if __name__ == "__main__":
 
-    main()
+    #main()
 
