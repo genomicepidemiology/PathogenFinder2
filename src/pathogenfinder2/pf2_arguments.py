@@ -29,24 +29,27 @@ def pf2_arguments():
     )
 
     # ---------- COMMON (shared by all subcommands) ----------
-    common_parent = argparse.ArgumentParser(add_help=False)
+
+    flags_parent = argparse.ArgumentParser(add_help=False)
+
 
     # General flags
-    common_parent.add_argument(
+    flags_parent.add_argument(
         "-v", "--version", action="version", version=__version__,
         help="Show program's version number and exit"
     )
-    common_parent.add_argument(
+    flags_parent.add_argument(
         "-d", "--debug", help="For debugging",
         action="store_const", dest="loglevel", const=logging.DEBUG,
         default=logging.WARNING
     )
-    common_parent.add_argument(
+    flags_parent.add_argument(
         "--verbose", help="Be verbose",
         action="store_const", dest="loglevel", const=logging.INFO
     )
 
     # General I/O options
+    common_parent = argparse.ArgumentParser(add_help=False)
     in_out = common_parent.add_argument_group(
         'General Input/Output options',
         "General Input/Output options that can apply to any mode/functionality"
@@ -78,11 +81,27 @@ def pf2_arguments():
         title="PathogenFinder2 functionalities", required=True, dest="subcmd"
     )
 
+    setup_parser = subparsers.add_parser(
+        "setup_gsea",
+        help="Set up the data for GSEA",
+        parents=[flags_parent]
+    )
+    setup_parser.set_defaults(action="Setup_SwissProt")
+
+    base_setup = setup_parser.add_argument_group(
+        'SetUp SwissProt for GSEA Options',
+        "Options for setting up SwissProt for GSEA Options"
+    )
+    base_setup.add_argument("--swissprot_tsv", help="Swiss-Prot TSV metadata file to be formated", default=False)
+    base_setup.add_argument("--go_file", help="Go-basic file", default=False)
+    base_setup.add_argument("--outputFolder", help="Out folder", required=True)
+
+
     # ----- PREDICT -----
     predict_parser = subparsers.add_parser(
         "predict",
         help="Predict bacterial pathogenic capacity with PathogenFinder2",
-        parents=[common_parent]
+        parents=[flags_parent, common_parent]
     )
     predict_parser.set_defaults(action="Prediction")
 
@@ -104,7 +123,7 @@ def pf2_arguments():
         default=None
     )
     base_pred.add_argument(
-        "--formatSeq",
+        "-f", "--formatSeq",
         help="The format of the bacterial sequence(s).",
         choices=["genome", "proteome", "embeddings"],
         required=True
@@ -148,12 +167,22 @@ def pf2_arguments():
         action="store_true",
         default=False
     )
+    protaln.add_argument(
+        "--dbMetadataProteins",
+        help=("Path to protein database metadata previously formated with setup_gsea"),
+        default=None
+    )
+    protaln.add_argument(
+        "--minsize_gsea",
+        help=("Minimum size for a gene set to be included in gsea"),
+        default=15
+    )
 
     # ----- INFER PROTEOME LM -----
     infer_parser = subparsers.add_parser(
         "infer_proteomeLM",
         help="Predict the protein content and create its embeddings with Prodigal and protT5",
-        parents=[common_parent]
+        parents=[flags_parent, common_parent]
     )
     infer_parser.set_defaults(action="Infer")
     infer_parser.add_argument(
@@ -171,7 +200,7 @@ def pf2_arguments():
     train_parser = subparsers.add_parser(
         "train",
         help="Train the PathogenFinder2 model for bacterial pathogenic capacity using your own data",
-        parents=[common_parent]
+        parents=[flags_parent, common_parent]
     )
     train_parser.set_defaults(action="Train")
 

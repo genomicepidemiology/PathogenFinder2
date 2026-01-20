@@ -13,6 +13,7 @@ from pathogenfinder2.preprocessdata.predict_proteins import Prodigal_Executable
 from pathogenfinder2.preprocessdata.prott5_embedder import ProtT5_Embedder
 from pathogenfinder2.dl.model import Pathogen_DLModel
 
+from pathogenfinder2.setup_prot_db import SetupSwissProt
 
 
 class PathogenFinder2_Main:
@@ -109,7 +110,8 @@ class PathogenFinder2_Main:
         return closer_dfs
     
     def map_attentions(self, db_path:str, diamond_path:str="diamond",
-                        amount_hits:int=1, amount_prots:int=20, gsea:bool=False,
+                        amount_prots:int=20, gsea:bool=False,
+                        db_protmetadata:str=None, gsea_minsize:int=15,
                         success_proteins:[dict, bool]=False):
         print(center_print("### Align proteins of interest ###"))
         from pathogenfinder2.postprocessdata.protein_PF2feature import MapProteins
@@ -126,21 +128,24 @@ class PathogenFinder2_Main:
 
             mapprot = MapProteins(folder_out=self.files_module["folders"]["results"][base_seq],
                                     folder_tmp=folder_tmp, diamond_path=diamond_path,
-                                    db_path=db_path, run_gsea=gsea)
-            tsv_file, fsa_file = mapprot.read_attentionfile(att_file=att_path,
-                                                            prot_file=prot_path, num_prot=amount_prots)
-            diamond_file = mapprot.run_diamond(infile=fsa_file, num_report=amount_hits,
-                                            log_folder=self.files_module["folders"]["log"][base_seq])
-            mapped_data = mapprot.analyze_results(infile=diamond_file, df_att=tsv_file)
-            mapped_datalst[base_seq] = mapped_data
+                                    db_path=db_path, metadata=db_protmetadata,
+                                    log_folder=self.files_module["folders"]["log"][base_seq])
+            aln_results, gsea_results = mapprot.map_proteins(att_file=att_path,
+                                            prot_file=prot_path, gsea=gsea, top_proteins=amount_prots,
+                                            gsea_minsize=int(gsea_minsize))
+            mapped_datalst[base_seq] = {"Alignment_Results": aln_results, "GSEA_Results": gsea_results}
             if self.cge_results:
                 self.cge_results[base_seq].add_software_exec(software_name="Diamond", command="",
                                         stdout="", stderr="", parameters={})
                 #TODO version uniref50
-                database = self.cge_results[base_seq].add_database(name="UniRef50",
+                database = self.cge_results[base_seq].add_database(name=db_path,
                                                                     version="")
-                self.cge_results[base_seq].add_proteinsatt(proteins_df=mapped_data,
+                self.cge_results[base_seq].add_proteinsatt(proteins_df=aln_results,
                                                             ref_db=database)
+                if gsea:
+                    self.cge_results[base_seq].add_software_exec(software_name="GSEA", command="",
+                                        stdout="", stderr="", parameters={})
+                    self.cge_results[base_seq].add_gsearesults(gsea_df=gsea_results, ref_db=database)
         return mapped_datalst
 
     def dl_predict(self, produce_embeddings, produce_attentions, success_proteins:[dict, bool]=False):
@@ -237,16 +242,32 @@ class PathogenFinder2_Main:
         _ = self.predict_proteincontent(prodigal_path=prodigal_path, folder_key="files")
         embed_file = self.infere_embeddings(model_path=prott5_path)
 
+    @staticmethod
+    def setup_swissprot(out_folder, tsv_path:str=False, go_file:str=False):
+        if not tsv_path:
+            fasta_path, tsv_path = SetupSwissProt.download_swissprot_bacteria(out_folder=out_folder)
+            print(center_print("####  SWISSPROT FASTA IS STORED IN {}  ####".format(os.path.abspath(fasta_path))))
+        if not go_file:
+            go_file = SetupSwissProt.download_go_basic(out_folder=out_folder)
+        tsv_formatted = "{}/uniprot_metadata_formated.tsv".format(out_folder)
+        tsv_format = SetupSwissProt.format_metadata(tsv_path, go_file,
+                                        output_path=tsv_formatted)
+        print(center_print("####  FORMATED SWISSPROT TSV IS STORED IN {}  ####".format(os.path.abspath(tsv_formatted))))
+
 def main():
     args = pf2_arguments()
     logging.basicConfig(level=args.loglevel)
-    pathogenfinder2_main = PathogenFinder2_Main(mode=args.action, outPath=args.outputFolder,
-                                                    configuration_file=args.config)
+
     if args.action == "Align_Proteins":
         pass
     elif args.action == "Map_Embeddings":
         pass
+    elif args.action == "Setup_SwissProt":
+        PathogenFinder2_Main.setup_swissprot(out_folder=args.outputFolder, tsv_path=args.swissprot_tsv,
+                                                go_file=args.go_file)
     else:
+        pathogenfinder2_main = PathogenFinder2_Main(mode=args.action, outPath=args.outputFolder,
+                                                    configuration_file=args.config)
         if args.action == "Prediction":
             predictions, success_proteins = pathogenfinder2_main.predict(
                                                     input_file=args.inputFile,  multi_file=args.multipleFiles, 
@@ -265,7 +286,8 @@ def main():
             if args.attProteins == "align":
                 prot_data = pathogenfinder2_main.map_attentions(db_path=args.dbProteins,
                                                                 diamond_path=args.diamondPath,
-                                                                gsea=args.gsea,
+                                                                gsea=args.gsea, db_protmetadata=args.dbMetadataProteins,
+                                                                gsea_minsize=args.minsize_gsea,
                                                                 success_proteins=success_proteins)
             if args.cge:
                 pathogenfinder2_main.save_cge_results()
