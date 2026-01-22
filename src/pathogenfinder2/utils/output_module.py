@@ -2,12 +2,11 @@ import os
 import pandas as pd
 import numpy as np
 import git
-import hashlib
 import uuid
 import datetime
 import json
 import hashlib
-from pathogenfinder2 import __version__
+import sys
 
 
 
@@ -78,7 +77,13 @@ class CGEResults:
 
         self.software_result = dict()
         self.add_software_result(args_dict=args_dict)
-    
+
+    @staticmethod
+    def runid_from_command() -> str:
+        command = " ".join(sys.argv)
+        return hashlib.sha1(command.encode()).hexdigest()
+
+  
     @staticmethod
     def generate_random_str(string_feature, values_dict):
         if isinstance(string_feature, pd.Series):
@@ -92,6 +97,8 @@ class CGEResults:
 
     def add_software_result(self, args_dict:dict):
         # TODO UPDATE AUTOMATIC
+        from pathogenfinder2 import __version__
+
         repo = git.Repo(search_parent_directories=True)
         tz = datetime.timezone.utc
         ft = "%Y-%m-%dT%H:%M:%S%z"
@@ -103,7 +110,7 @@ class CGEResults:
         self.software_result["software_branch"] = "{}".format(repo.active_branch.name)
         self.software_result["software_commit"] = "{}".format(repo.head.object.hexsha)
         self.software_result["software_log"] = ""
-        self.software_result["run_id"] = hashlib.md5(str(args_dict).encode()).hexdigest()
+        self.software_result["run_id"] = hashlib.sha1(" ".join(sys.argv).encode()).hexdigest()
         self.software_result["run_date"] = data_time
         self.software_result["phenotypes_ml"] = {}
         self.software_result["seq_regions"] = {}
@@ -117,19 +124,14 @@ class CGEResults:
         self.software_result["result_summary"] = result_summary
 
 
-    def add_software_exec(self, software_name:str, command:str, stdout:str, 
-                            stderr:str, parameters:[str, dict]):
+    def add_software_exec(self, parameters:[str, dict]):
         # TODO
         software_exec = {}
         software_exec["type"] = "software_exec"
-        software_exec["key"] = "{}".format(software_name)
- #       software_exec["key"] = "{}_{}".format(software_name,
-  #                                                  hashlib.md5(str(parameters).encode()).hexdigest())
-        software_exec["software_name"] = software_name
-        software_exec["command"] = command
+        software_exec["key"] = hashlib.sha1(" ".join(sys.argv).encode()).hexdigest()
+        software_exec["software_name"] = self.software_result["software_name"]
+        software_exec["command"] = " ".join(sys.argv)
         software_exec["parameters"] = parameters
-        software_exec["stdout"] = stdout
-        software_exec["stderr"] = stderr
         self.software_result["software_executions"][software_exec["key"]] = software_exec
 
     def add_database(self, name, version, commit=""):

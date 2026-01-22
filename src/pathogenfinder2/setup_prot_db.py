@@ -1,6 +1,7 @@
 import re
 import requests
 import os
+import subprocess
 from tqdm import tqdm
 import pandas as pd
 from goatools.obo_parser import GODag
@@ -72,7 +73,7 @@ class SetupSwissProt:
                 for chunk in r.iter_content(chunk_size=1 << 20):
                     if chunk:
                         f.write(chunk)
-        return out_path
+        return os.path.abspath(out_path)
 
     @staticmethod
     def download_swissprot_bacteria(out_folder,
@@ -110,7 +111,7 @@ class SetupSwissProt:
             tsv_path,
             desc="Downloading TSV",
         )
-        return fasta_path, tsv_path
+        return os.path.abspath(fasta_path), os.path.abspath(tsv_path)
 
     @staticmethod
     def bp_filter_and_deepest(
@@ -162,6 +163,16 @@ class SetupSwissProt:
         deepest = [g for g in selected if go_dag[g].depth == maxd]
         return bp_ids, (deepest if keep_all_ties else deepest[:1])
 
+    @staticmethod
+    def diamond_index(fasta, db_name, diamond_path):
+        try:
+            subprocess.run(
+                [diamond_path, "makedb", "--in", fasta, "--db", db_name],
+                check=True
+            )
+            print(f"DIAMOND DB created: {db_name}.dmnd")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError("DIAMOND indexing failed") from e
 
     @staticmethod
     def set_goterm(go_dag, metadata, column_name="Gene Ontology (biological process)"):

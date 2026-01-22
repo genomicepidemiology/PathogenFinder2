@@ -2,35 +2,38 @@ import logging
 import os
 import sys
 import time
-
+from pathlib import Path
 
 from pathogenfinder2.pf2_arguments import pf2_arguments
-from pathogenfinder2.utils.output_module import Prediction_Report, CGEResults
 from pathogenfinder2.utils.os_utils import read_multifiles, center_print
-from pathogenfinder2.utils.configuration import ConfigurationPF2, Files_Module
+from pathogenfinder2.utils.output_module import Prediction_Report, CGEResults
 
-from pathogenfinder2.preprocessdata.predict_proteins import Prodigal_Executable
-from pathogenfinder2.preprocessdata.prott5_embedder import ProtT5_Embedder
-from pathogenfinder2.dl.model import Pathogen_DLModel
 
-from pathogenfinder2.setup_prot_db import SetupSwissProt
 
 
 class PathogenFinder2_Main:
 
     MODES = ["Align_Proteins", "Map_Embeddings", "Prediction", "Train", "Test", "Infer"]
 
-    def __init__(self, mode:str, outPath:str, configuration_file:[str, dict, bool]=False) -> None:
+    def __init__(self, mode:str, outPath:str, configuration_file:[str, dict, bool]=False,
+                        cge_output:bool=False) -> None:
+
+        from pathogenfinder2.utils.configuration import ConfigurationPF2, Files_Module
+
         if mode not in PathogenFinder2_Main.MODES:
             raise ValueError("The mode '{}' is not available as part of PathogeFinder2".format(mode))
         self.pf2_config = ConfigurationPF2(mode=mode, user_config=configuration_file)
     
         self.files_module = Files_Module(outputFolder=outPath, mode=mode)
 
-        self.cge_results = False
+        if cge_output:
+            self.cge_results = {}
+        else:
+            self.cge_results = False
         
         
     def predict_proteincontent(self, folder_key="preprocess", prodigal_path="prodigal"):
+        from pathogenfinder2.preprocessdata.predict_proteins import Prodigal_Executable
 
         start = time.time()
         print(center_print("### Predicting protein content with Prodigal ###"), end="", flush=True)
@@ -63,14 +66,17 @@ class PathogenFinder2_Main:
             if not self.cge_results and success_prediction[baseseq] != "Success":
                 sys.exit(success_prediction[baseseq]) 
 
-            if self.cge_results:
-                self.cge_results[baseseq].add_software_exec(software_name="Prodigal", command=command,
-                                            stdout=outstd, stderr=errstd, parameters={"inputfile": input_seq})
+            #if self.cge_results:
+             #   self.cge_results[baseseq].add_software_exec(software_name="Prodigal", command=command,
+              #                              stdout=outstd, stderr=errstd, parameters={"inputfile": input_seq})
 
         return success_prediction
             
     def infere_embeddings(self, success_proteins:dict=False, model_path:str=None,
                                     pool_mode:str="mean", split_kmer:bool=True):
+        
+        from pathogenfinder2.preprocessdata.prott5_embedder import ProtT5_Embedder
+
         start = time.time()
         print(center_print("### Embedding Proteins with protT5 ###"))
 
@@ -82,16 +88,16 @@ class PathogenFinder2_Main:
             embeder = ProtT5_Embedder(model_dir=model_path)
             embeder.get_embeddings(seq_path=input_file,  emb_path=embedding_file, pool_mode=pool_mode,
                                        split_kmer=split_kmer)
-            if self.cge_results:
-                self.cge_results[base_seq].add_software_exec(software_name="protT5", command="",
-                                            stdout="", stderr="", parameters={})
+           # if self.cge_results:
+            #    self.cge_results[base_seq].add_software_exec(software_name="protT5", command="",
+             #                               stdout="", stderr="", parameters={})
 
     def map_embeddings(self, embeddings_preds:str, bpl_file:str=None, success_proteins:[dict, bool]=False):
         print(center_print("### Map proteome to the Bacterial Pathogenic Landscape ###"))
         from pathogenfinder2.postprocessdata.embedding_PF2feature import MapEmbeddings
 
         if bpl_file is None:
-            embeddings_bpl = ConfigurationPF2.get_bplfile()
+            embeddings_bpl = self.pf2_config.get_bplfile()
         else:
             embeddings_bpl = bpl_file
         closer_dfs = {}
@@ -135,20 +141,23 @@ class PathogenFinder2_Main:
                                             gsea_minsize=int(gsea_minsize))
             mapped_datalst[base_seq] = {"Alignment_Results": aln_results, "GSEA_Results": gsea_results}
             if self.cge_results:
-                self.cge_results[base_seq].add_software_exec(software_name="Diamond", command="",
-                                        stdout="", stderr="", parameters={})
+                #self.cge_results[base_seq].add_software_exec(software_name="Diamond", command="",
+                 #                       stdout="", stderr="", parameters={})
                 #TODO version uniref50
                 database = self.cge_results[base_seq].add_database(name=db_path,
                                                                     version="")
                 self.cge_results[base_seq].add_proteinsatt(proteins_df=aln_results,
                                                             ref_db=database)
                 if gsea:
-                    self.cge_results[base_seq].add_software_exec(software_name="GSEA", command="",
-                                        stdout="", stderr="", parameters={})
+                    #self.cge_results[base_seq].add_software_exec(software_name="GSEA", command="",
+                     #                   stdout="", stderr="", parameters={})
                     self.cge_results[base_seq].add_gsearesults(gsea_df=gsea_results, ref_db=database)
         return mapped_datalst
 
     def dl_predict(self, produce_embeddings, produce_attentions, success_proteins:[dict, bool]=False):
+
+        from pathogenfinder2.dl.model import Pathogen_DLModel
+
         print(center_print("### Inferring pathogenicity with Neural Networks ###"))
         self.files_module.add_nn_products(produce_embeddings=produce_embeddings,
                                             produce_attentions=produce_attentions)
@@ -173,7 +182,7 @@ class PathogenFinder2_Main:
 
     def predict(self, input_file:[bool,str], multi_file:[bool, str]=False, format_seq:str="genome",
                     prodigal_path:str=None, prott5_path:str=None, produce_embeddings:bool=False,
-                    produce_attentions:bool=False, cge_output:bool=False):
+                    produce_attentions:bool=False):
 
 
         self.files_module.add_input(input_file=input_file, multi_file=multi_file)
@@ -183,21 +192,23 @@ class PathogenFinder2_Main:
 
         self.files_module.create_nestedoutput(format_seq=format_seq, input_file=input_file,
                                                 multi_file=multi_file)
-        if cge_output:
-            self.cge_results = {}
+        if isinstance(self.cge_results, dict):
             for basein in self.files_module["input_files"]:
                 self.cge_results[basein] = CGEResults(args_dict=self.pf2_config)
+                self.cge_results[basein].add_software_exec(parameters={
+                                "inputfasta":self.files_module["data_files"]["input_sequence"][basein],
+                                "inputfastq_1":None, "inputfastq_2":None})
         else:
-            self.cge_results = cge_output
+            pass
 
         if format_seq == "genome":
             success_proteins = self.predict_proteincontent(prodigal_path=prodigal_path)
-            if cge_output:
+            if self.cge_results:
                 success_proteins = success_proteins
             else:
                 success_proteins = False
         else:
-            if cge_output:
+            if self.cge_results:
                 success_proteins = {}
             else:
                 success_proteins = False        
@@ -243,10 +254,18 @@ class PathogenFinder2_Main:
         embed_file = self.infere_embeddings(model_path=prott5_path)
 
     @staticmethod
-    def setup_swissprot(out_folder, tsv_path:str=False, go_file:str=False):
+    def setup_swissprot(out_folder, tsv_path:str=False, go_file:str=False, diamond_path:str=None):
+        from pathogenfinder2.setup_prot_db import SetupSwissProt
+
         if not tsv_path:
+            if diamond_path is None:
+                raise ValueError("Please provide a path to the diamond executable")
             fasta_path, tsv_path = SetupSwissProt.download_swissprot_bacteria(out_folder=out_folder)
-            print(center_print("####  SWISSPROT FASTA IS STORED IN {}  ####".format(os.path.abspath(fasta_path))))
+            print(center_print("####  SWISSPROT FASTA IS STORED IN {}  ####".format(fasta_path)))
+            diamond_index = SetupSwissProt.diamond_index(fasta=fasta_path, db_name=str(Path(fasta_path).with_suffix("")),
+                                                            diamond_path=diamond_path)
+            print(center_print("####  DIAMOND INDEXED SWISSPROT FASTA IS STORED IN {}  ####".format(
+                                str(Path(diamond_index).with_suffix("")))))
         if not go_file:
             go_file = SetupSwissProt.download_go_basic(out_folder=out_folder)
         tsv_formatted = "{}/uniprot_metadata_formated.tsv".format(out_folder)
@@ -264,16 +283,16 @@ def main():
         pass
     elif args.action == "Setup_SwissProt":
         PathogenFinder2_Main.setup_swissprot(out_folder=args.outputFolder, tsv_path=args.swissprot_tsv,
-                                                go_file=args.go_file)
+                                                go_file=args.go_file, diamond_path=args.diamondPath)
     else:
         pathogenfinder2_main = PathogenFinder2_Main(mode=args.action, outPath=args.outputFolder,
-                                                    configuration_file=args.config)
+                                                    configuration_file=args.config, cge_output=args.cge)
         if args.action == "Prediction":
             predictions, success_proteins = pathogenfinder2_main.predict(
                                                     input_file=args.inputFile,  multi_file=args.multipleFiles, 
                                                     format_seq=args.formatSeq, prodigal_path=args.prodigalPath,
                                                     prott5_path=args.protT5Path, produce_embeddings=args.embedProteome,
-                                                    produce_attentions=args.attProteins, cge_output=args.cge)
+                                                    produce_attentions=args.attProteins)
 
             results_module = Prediction_Report(out_folder=pathogenfinder2_main.files_module["folders"]["results"])
             predictions_paths, embeddings_paths, att_paths = results_module.save_report(

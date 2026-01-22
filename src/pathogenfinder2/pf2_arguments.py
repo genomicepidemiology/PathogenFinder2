@@ -95,6 +95,7 @@ def pf2_arguments():
     base_setup.add_argument("--swissprot_tsv", help="Swiss-Prot TSV metadata file to be formated", default=False)
     base_setup.add_argument("--go_file", help="Go-basic file", default=False)
     base_setup.add_argument("--outputFolder", help="Out folder", required=True)
+    base_setup.add_argument("--diamondPath", help="Path to Diamond executable", default="diamond")
 
 
     # ----- PREDICT -----

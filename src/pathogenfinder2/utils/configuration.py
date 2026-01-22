@@ -41,8 +41,7 @@ class ConfigurationPF2(UserDict):
             config_data["Model Parameters"]["Network Weights"].append(weight_file)
         return config_data
 
-    @staticmethod
-    def get_bplfile():
+    def get_bplfile(self):
         return Path(ConfigurationPF2.CURRENT_DIR) / '../data/bpl/embeddings.npz'
 
 
