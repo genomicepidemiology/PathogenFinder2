@@ -31,7 +31,7 @@ license = {file = "LICENSE"}
 keywords = ["deep learning", "epidemiology", "microbiology"]
 
 [project.optional-dependencies]
-mapping = ["umap-learn==0.5.4", "seaborn", "gseapy", "goatools"]
+mapping = ["umap-learn>=0.5.8", "seaborn", "gseapy", "goatools"]
 
 [project.urls]
 Homepage = "https://example.com"
