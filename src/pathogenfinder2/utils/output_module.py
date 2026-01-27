@@ -224,6 +224,7 @@ class CGEResults:
 
         gsea_df = gsea_df.rename(columns={"Lead_genes_description":"seq_regions", "Term_class": "vir_class",
                             "FDR q-val":"evidence", "NES": "degree", "Term": "vir_function"})
+        gsea_df = gsea_df[gsea_df["degree"]>0]
         gsea_df["vir_virulent"] = "unknown"
         gsea_df["ref_database"] = ref_db["key"]
         gsea_df["grade"] = 0
