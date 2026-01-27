@@ -147,8 +147,6 @@ class CGEResults:
     def add_phenotype_result(self, results_ensemble):
         phenotype_result = {}
         phenotype_result["type"] = "phenotype_ml"
-        #phenotype_result["key"] = "human-bacterial-pathogenicity_{}".format(
-         #                               hashlib.md5(str(results_ensemble).encode()).hexdigest())
         phenotype_result["key"] = "human_bacterial_pathogenicity"
         phenotype_result["category"] = "Pathogenicity"
         phenotype_result["ensemble_pred"] = True
@@ -217,12 +215,12 @@ class CGEResults:
 
     def add_gsearesults(self, gsea_df, ref_db):
         columns_selected = ["type", "key", "category", "vir_function", "vir_virulent", "vir_class",
-                            "degree", "evidence", "seq_regions", "ref_database", "grade"]
+                            "degree", "evidence", "note", "ref_database", "grade"]
         gsea_df["type"] = "phenotype"
         gsea_df["category"] = "functional_enrichment"
-        gsea_df["Lead_genes_description"] = gsea_df["Lead_genes_description"].str.split(";")
-
-        gsea_df = gsea_df.rename(columns={"Lead_genes_description":"seq_regions", "Term_class": "vir_class",
+        lead_gene = gsea_df["Lead_genes_description"].str.split(";").str[0]
+        gsea_df["note"] = lead_gene.str.split(" OS=").str[0]
+        gsea_df = gsea_df.rename(columns={"Term_class": "vir_class",
                             "FDR q-val":"evidence", "NES": "degree", "Term": "vir_function"})
         gsea_df = gsea_df[gsea_df["degree"]>0]
         gsea_df["vir_virulent"] = "unknown"
