@@ -8,7 +8,7 @@ version = "0.6.0"
 dependencies = ["pandas >= 2.2.2", "accelerate",
 		"matplotlib", "scikit-learn", "torch >= 2.3.1",
 	        "tqdm", "h5py","sentencepiece",
-	        "transformers", "pytorch_warmup",
+	        "transformers>=3.0", "pytorch_warmup",
 	        "torchvision", "torchmetrics", "wandb"]
 requires-python = ">= 3.10"
 authors = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"},]

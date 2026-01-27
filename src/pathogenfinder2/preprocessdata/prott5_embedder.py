@@ -257,7 +257,8 @@ class ProtT5_Embedder:
             if len(batch) >= max_batch or n_res_batch>=max_residues or seq_idx==len(seq_dict) or seq_len>max_seq_len:
                 pdb_ids, seqs, seq_lens = zip(*batch)
                 batch = list()
-                token_encoding = self.vocab.batch_encode_plus(seqs, add_special_tokens=True, padding="longest")
+ #               token_encoding = self.vocab.batch_encode_plus(seqs, add_special_tokens=True, padding="longest")
+                token_encoding = self.vocab(seqs, add_special_tokens=True, padding="longest")
                 input_ids      = torch.tensor(token_encoding['input_ids']).to(self.device)
                 attention_mask = torch.tensor(token_encoding['attention_mask']).to(self.device)
                 oom_err = False
