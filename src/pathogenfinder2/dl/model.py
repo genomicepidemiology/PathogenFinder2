@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import os
 from collections import defaultdict
+from tqdm import tqdm
 
 from pathogenfinder2.dl.dl_functions.train_model import Train_NeuralNetwork
 from pathogenfinder2.dl.dl_functions.inference_model import Inference_NeuralNetwork
@@ -158,7 +159,9 @@ class Pathogen_DLModel:
         embedding_maps_ensemble = []
         ensemble_results = False
         input_metadata = pd.read_csv(input_metapath, sep="\t")
-        for ens in range(len(self.model_parameters["Network Weights"])):
+        amount_nets = len(self.model_parameters["Network Weights"])
+        for ens in tqdm(range(amount_nets), total=amount_nets, desc="Infering from Neural Network Models", unit="Neural Network",
+                        dynamic_ncols=True, smoothing=0.05, mininterval=0.2, position=0):
             network_module = Network_Module(model_type=self.model_type,
                                         out_folder=self.misc_parameters["Results Folder"],
                                         model_parameters=self.model_parameters,

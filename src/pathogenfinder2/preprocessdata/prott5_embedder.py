@@ -8,7 +8,6 @@ Created on Wed Sep 23 18:33:22 2020
 @edits: ffalfred
 """
 
-import argparse
 import time
 import numpy as np
 from pathlib import Path
@@ -20,6 +19,8 @@ import logging
 import torch
 import h5py
 from transformers import T5EncoderModel, T5Tokenizer
+from huggingface_hub import snapshot_download
+
 
 
 class ProtT5_Embedder:
@@ -30,29 +31,72 @@ class ProtT5_Embedder:
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-        self.model, self.vocab = self.get_T5_model(model_dir, transformer_link)
+        self.model, self.vocab = self.get_T5_model(
+            model_dir=model_dir,
+            transformer_link=transformer_link,
+        )
         if not pool_mode:
             self.pool_mode = None
-        elif pool_mode == "mean" or pool_mode == "max":
+        elif pool_mode in ("mean", "max"):
             self.pool_mode = pool_mode
         else:
-            raise ValueError("The pool mode '{}' is not an option."
-                            "Only 'mean' and 'max' are available.")
+            raise ValueError(
+                f"The pool mode '{pool_mode}' is not an option. Only 'mean' and 'max' are available."
+            )
 
+    def get_T5_model(self, model_dir=None, transformer_link="Rostlab/prot_t5_xl_half_uniref50-enc"):
+        if model_dir is not None and os.path.isdir(model_dir):
+            use_local = True
+            source = model_dir
+            cache_dir = model_dir
+        else:
+            use_local = False
+            source = transformer_link
+            cache_dir = None
 
-    def get_T5_model(self, model_dir, transformer_link="Rostlab/prot_t5_xl_half_uniref50-enc"):
-        logging.info("Loading: {}".format(transformer_link))
-        if model_dir is not None:
-            logging.info("##########################")
-            logging.info("Loading cached model from: {}".format(model_dir))
-            logging.info("##########################")
-        model = T5EncoderModel.from_pretrained(transformer_link, cache_dir=model_dir)
-        model.full() if self.device=='cpu' else model.half() # only cast to full-precision if no GPU is available
+        # --- Check whether download is needed ---
+        download_needed = False
 
-        model = model.to(self.device)
-        model = model.eval()
-        vocab = T5Tokenizer.from_pretrained(transformer_link, do_lower_case=False, legacy=True)
+        if not use_local:
+            # We are loading from the HUB repo ID
+            try:
+                # Try to resolve snapshot locally (no download allowed)
+                snapshot_download(
+                    repo_id=transformer_link,
+                    local_files_only=True
+                )
+                # If this succeeds, model is fully cached → no need to print
+            except Exception:
+                # Cache miss → download will happen
+                download_needed = True
+
+        # --- Print only if download is needed ---
+        if download_needed:
+            print("### Loading ProtT5 from HuggingFace Hub (downloading…) ###")
+        # --- Load model ---
+        model = T5EncoderModel.from_pretrained(
+            source,
+            cache_dir=cache_dir,
+            local_files_only=use_local,
+        )
+
+        vocab = T5Tokenizer.from_pretrained(
+            source,
+            do_lower_case=False,
+            legacy=True,
+            cache_dir=cache_dir,
+            local_files_only=use_local,
+        )
+
+        # precision cast
+        if self.device == 'cpu':
+            model = model.float()
+        else:
+            model = model.half()
+
+        model = model.to(self.device).eval()
         return model, vocab
+
 
     @staticmethod
     def read_fasta(fasta_path):
@@ -181,22 +225,27 @@ class ProtT5_Embedder:
               #seq_dict.keys())), next(iter(seq_dict.values()))) )
         #print('########################################')
         #print('Total number of sequences: {}'.format(len(seq_dict)))
-
+        n_sequences = len(seq_dict)
         avg_length = sum([ len(seq) for _, seq in seq_dict.items()]) / len(seq_dict)
         n_long     = sum([ 1 for _, seq in seq_dict.items() if len(seq)>max_seq_len])
-        seq_dict   = sorted( seq_dict.items(), key=lambda kv: len( seq_dict[kv[0]] ), reverse=True )
 
         logging.info("Amount of sequences: {}".format(len(seq_dict)))
         logging.info("Average sequence length: {}".format(avg_length))
         logging.info("Number of sequences >{}: {}".format(max_seq_len, n_long))
 
+        items   = sorted(seq_dict.items(), key=lambda kv: len( seq_dict[kv[0]] ), reverse=True )
         start = time.time()
-        batch = list()
+        batch = []
 
         maxLen_embed = max_seq_len
         count = 0
 
-        for seq_idx, (pdb_id, seq) in tqdm(enumerate(seq_dict,1)):
+        for seq_idx, (pdb_id, seq) in tqdm(enumerate(items, start=1), total=n_sequences,
+                                            desc="Embedding proteins", unit="protein",
+                                            dynamic_ncols=True, smoothing=0.05, mininterval=0.2,
+                                            bar_format=("{desc} {percentage:>3.0f}% |{bar}| "
+                                                        "{n_fmt}/{total_fmt} • {rate_fmt} • ETA {remaining}")):
+
             seq = seq.replace('U','X').replace('Z','X').replace('O','X')
             seq_len = len(seq)
             seq = ' '.join(list(seq))
@@ -208,7 +257,8 @@ class ProtT5_Embedder:
             if len(batch) >= max_batch or n_res_batch>=max_residues or seq_idx==len(seq_dict) or seq_len>max_seq_len:
                 pdb_ids, seqs, seq_lens = zip(*batch)
                 batch = list()
-                token_encoding = self.vocab.batch_encode_plus(seqs, add_special_tokens=True, padding="longest")
+ #               token_encoding = self.vocab.batch_encode_plus(seqs, add_special_tokens=True, padding="longest")
+                token_encoding = self.vocab(seqs, add_special_tokens=True, padding="longest")
                 input_ids      = torch.tensor(token_encoding['input_ids']).to(self.device)
                 attention_mask = torch.tensor(token_encoding['attention_mask']).to(self.device)
                 oom_err = False
@@ -278,7 +328,6 @@ def wrapper_multipleCore(embeder, path_file, emb_path, pool_mode,
                 base_name = Path(file_path).stem
                 emb_file = os.path.abspath("{}/{}.h5".format(emb_path, base_name))
                 if overwritte or not os.path.isfile(emb_file):
-                    print(base_name)
                     try:
                         embeder.get_embeddings(file_path, emb_file,
                               pool_mode=pool_mode, split_kmer=split_kmer)

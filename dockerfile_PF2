@@ -20,7 +20,6 @@ ADD .. /app
 WORKDIR /app
 RUN cd /; mkdir pathogenfinder2
 ADD .. /pathogenfinder2
-#RUN gunzip /pathogenfinder2/data/embeddings_BPL/embeddings.npz.gz
 RUN cd /pathogenfinder2; pip install .[mapping]
 
 

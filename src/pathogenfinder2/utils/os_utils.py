@@ -1,5 +1,6 @@
 import os
 import datetime
+import shutil
 
 
 def get_filename(file_path:str) -> (str,str):
@@ -30,4 +31,8 @@ def read_multifiles(path):
             list_files.append(line.rstrip())
             list_basefile.append(os.path.basename(line.rstrip()))
     return list_files, list_basefile
+
+
+def center_print(msg: str) -> str:
+    return msg.center(shutil.get_terminal_size().columns)
 

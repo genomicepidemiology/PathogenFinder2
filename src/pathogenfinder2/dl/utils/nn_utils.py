@@ -227,7 +227,8 @@ class Network_Module:
         batch_n = 0
         batches_results = []
         with torch.inference_mode():
-            for batch in tqdm(val_loader):
+            for batch in tqdm(val_loader, desc=f"Predictive pass", unit="batch",
+                                dynamic_ncols=True, smoothing=0.05, mininterval=0.2, position=1, leave=False):
                 
                 pos_first, pos_last = count, count+batch_size
                 if self.memory_profiler:

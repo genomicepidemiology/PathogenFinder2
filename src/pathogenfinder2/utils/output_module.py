@@ -2,11 +2,11 @@ import os
 import pandas as pd
 import numpy as np
 import git
-import hashlib
 import uuid
 import datetime
 import json
-from pathogenfinder2 import __version__
+import hashlib
+import sys
 
 
 
@@ -77,17 +77,28 @@ class CGEResults:
 
         self.software_result = dict()
         self.add_software_result(args_dict=args_dict)
-    
+
+    @staticmethod
+    def runid_from_command() -> str:
+        command = " ".join(sys.argv)
+        return hashlib.sha1(command.encode()).hexdigest()
+
+  
     @staticmethod
     def generate_random_str(string_feature, values_dict):
+        if isinstance(string_feature, pd.Series):
+            return string_feature.apply(
+                lambda x: CGEResults.generate_random_str(x, values_dict)
+            )
         while True:
-            key = "{};;{}".format(string_feature, uuid.uuid4())
+            key = f"{string_feature};;{uuid.uuid4()}"
             if key not in values_dict:
-                break
-        return key
+                return key
 
     def add_software_result(self, args_dict:dict):
         # TODO UPDATE AUTOMATIC
+        from pathogenfinder2 import __version__
+
         repo = git.Repo(search_parent_directories=True)
         tz = datetime.timezone.utc
         ft = "%Y-%m-%dT%H:%M:%S%z"
@@ -99,10 +110,11 @@ class CGEResults:
         self.software_result["software_branch"] = "{}".format(repo.active_branch.name)
         self.software_result["software_commit"] = "{}".format(repo.head.object.hexsha)
         self.software_result["software_log"] = ""
-        self.software_result["run_id"] = hashlib.md5(str(args_dict).encode()).hexdigest()
+        self.software_result["run_id"] = hashlib.sha1(" ".join(sys.argv).encode()).hexdigest()
         self.software_result["run_date"] = data_time
         self.software_result["phenotypes_ml"] = {}
         self.software_result["seq_regions"] = {}
+        self.software_result["phenotypes"] = {}
         self.software_result["neighbors"] = {}
         self.software_result["software_executions"] = {}
         self.software_result["databases"] = {}
@@ -112,19 +124,14 @@ class CGEResults:
         self.software_result["result_summary"] = result_summary
 
 
-    def add_software_exec(self, software_name:str, command:str, stdout:str, 
-                            stderr:str, parameters:[str, dict]):
+    def add_software_exec(self, parameters:[str, dict]):
         # TODO
         software_exec = {}
         software_exec["type"] = "software_exec"
-        software_exec["key"] = "{}".format(software_name)
- #       software_exec["key"] = "{}_{}".format(software_name,
-  #                                                  hashlib.md5(str(parameters).encode()).hexdigest())
-        software_exec["software_name"] = software_name
-        software_exec["command"] = command
+        software_exec["key"] = hashlib.sha1(" ".join(sys.argv).encode()).hexdigest()
+        software_exec["software_name"] = self.software_result["software_name"]
+        software_exec["command"] = " ".join(sys.argv)
         software_exec["parameters"] = parameters
-        software_exec["stdout"] = stdout
-        software_exec["stderr"] = stderr
         self.software_result["software_executions"][software_exec["key"]] = software_exec
 
     def add_database(self, name, version, commit=""):
@@ -140,8 +147,6 @@ class CGEResults:
     def add_phenotype_result(self, results_ensemble):
         phenotype_result = {}
         phenotype_result["type"] = "phenotype_ml"
-        #phenotype_result["key"] = "human-bacterial-pathogenicity_{}".format(
-         #                               hashlib.md5(str(results_ensemble).encode()).hexdigest())
         phenotype_result["key"] = "human_bacterial_pathogenicity"
         phenotype_result["category"] = "Pathogenicity"
         phenotype_result["ensemble_pred"] = True
@@ -177,51 +182,58 @@ class CGEResults:
             neighbor["software"] = "Scikit-learn"
             neighbor["rank_neighbors"] = str(n)
             self.software_result["neighbors"][neighbor["key"]] = neighbor
-            
 
     def add_proteinsatt(self, proteins_df, ref_db):
-        for n in range(len(proteins_df)):
-            entry = proteins_df.iloc[n]
-            protein = {}
-            name = "{};;{}".format(entry["Query_ID"], entry["Ref_ID"])
-            protein["type"] = "seq_region"
-            protein["key"] =  CGEResults.generate_random_str(name, "neighbors")
-            protein["gene"] = "Protein"
-            protein["name"] = entry["Ref_name"]
-            protein["identity"] = entry["Identity"]
-            protein["alignment_length"] = entry["Alignment_Length"]
-            protein["ref_seq_length"] = entry["Ref_Length"]
-            protein["coverage"] = entry["Ref_coverage"]
-            protein["ref_id"] = entry["Ref_ID"]
-            protein["ref_acc"] = entry["Ref_ID"]
-            protein["ref_start_pos"] = entry["Ref_start_pos"]
-            protein["ref_end_pos"] = entry["Ref_end_pos"]
-            protein["query_id"] = entry["Query_ID"]
-            protein["query_start_pos"] = entry["Query_start_pos"]
-            protein["query_end_pos"] = entry["Query_end_pos"]
-            protein["ref_database"] = ["UniRef50"]
-#            protein["note"] = "Attention Score {}".format(entry["Attention Value"])
-            if protein["name"] == "No Match Found":
-                protein["grade"] = -1
-            else:
-                protein["coverage"] = float(protein["coverage"])
-                protein["identity"] = float(protein["identity"])
-                protein["ref_start_pos"] = int(protein["ref_start_pos"])
-                protein["alignment_length"] = int(protein["alignment_length"])
-                protein["ref_seq_length"] = int(protein["ref_seq_length"])
-                protein["ref_start_pos"] = int(protein["ref_start_pos"])
-                protein["ref_end_pos"] = int(protein["ref_end_pos"])
-                protein["query_start_pos"] = int(protein["query_start_pos"])
-                protein["query_end_pos"] = int(protein["query_end_pos"])
-                if float(protein["coverage"]) == 100. and float(protein["identity"]) == 100.:
-                    protein["grade"] = 3
-                elif float(protein["coverage"]) == 100. and float(protein["identity"]) < 100.:
-                    protein["grade"] = 2
-                elif float(protein["coverage"]) < 100.:
-                    protein["grade"] = 1
-                else:
-                    protein["grade"] = 0
+        columns_selected = ["type", "gene", "key", "name", "identity", "alignment_length", "ref_seq_length",
+                            "coverage", "ref_id", "ref_start_pos", "ref_end_pos", "query_id",
+                            "query_start_pos", "query_end_pos", "ref_acc", "ref_database", "grade"]
+        proteins_df["type"] = "seq_region"
+        proteins_df["gene"] = "Protein"
+        proteins_df = proteins_df.rename(columns={
+                        "stitle": "name", "pident": "identity", "length": "alignment_length",
+                        "slen": "ref_seq_length", "scovhsp": "coverage", "sseqid": "ref_id",
+                        "sstart": "ref_start_pos", "send": "ref_end_pos", "qseqid": "query_id",
+                        "qstart": "query_start_pos", "qend": "query_end_pos"})
+        proteins_df["ref_acc"] = proteins_df["ref_id"]
+        proteins_df["ref_database"] = ref_db["key"]
+        proteins_df = proteins_df.replace("-", None)
+        proteins_df = proteins_df.astype({
+            "coverage": "float", "identity": "float", "ref_start_pos": "float", "ref_end_pos": "float",
+            "alignment_length": "float", "ref_seq_length": "float", "query_start_pos": "float", "query_end_pos": "float",
+            "ref_start_pos":"float", "ref_end_pos": "float"})
+        proteins_df["grade"] = 0
+        proteins_df.loc[proteins_df["name"]=="No Match Found", "grade"] = -1
+        proteins_df.loc[(proteins_df["coverage"] == 100) & (proteins_df["identity"] == 100), "grade"] = 3
+        proteins_df.loc[(proteins_df["coverage"] == 100) & (proteins_df["identity"] < 100), "grade"] = 2
+        proteins_df.loc[(proteins_df["coverage"] < 100), "grade"] = 1
+        proteins_df = proteins_df.fillna("-")
+        name = proteins_df["query_id"] + ";;" + proteins_df["ref_id"]
+        proteins_df["key"] = CGEResults.generate_random_str(name, "proteins")
+        protein_records = proteins_df[columns_selected].to_dict(orient="records")
+        for protein in protein_records:
             self.software_result["seq_regions"][protein["key"]] = protein
+
+    def add_gsearesults(self, gsea_df, ref_db):
+        columns_selected = ["type", "key", "category", "vir_function", "vir_virulent", "vir_class",
+                            "degree", "evidence", "note", "ref_database", "grade"]
+        gsea_df["type"] = "phenotype"
+        gsea_df["category"] = "functional_enrichment"
+        lead_gene = gsea_df["Lead_genes_description"].str.split(";").str[0]
+        gsea_df["note"] = lead_gene.str.split(" OS=").str[0]
+        gsea_df = gsea_df.rename(columns={"Term_class": "vir_class",
+                            "FDR q-val":"evidence", "NES": "degree", "Term": "vir_function"})
+        gsea_df = gsea_df[gsea_df["degree"]>0]
+        gsea_df["vir_virulent"] = "unknown"
+        gsea_df["ref_database"] = ref_db["key"]
+        gsea_df["grade"] = 0
+        gsea_df.loc[gsea_df["evidence"]<0.4, "grade"] = 1
+        gsea_df.loc[gsea_df["evidence"]<0.05, "grade"] = 2
+        gsea_df.loc[gsea_df["evidence"]<=0.01, "grade"] = 3
+        name = gsea_df["vir_class"]+";;"+gsea_df["vir_function"]
+        gsea_df["key"] = CGEResults.generate_random_str(name, "enrichment")
+        gsea_records = gsea_df[columns_selected].to_dict(orient="records")
+        for gsea in gsea_records:
+            self.software_result["phenotypes"][gsea["key"]] = gsea
 
     def save_results(self, output_path):
         with open("{}".format(output_path), 'w') as f:

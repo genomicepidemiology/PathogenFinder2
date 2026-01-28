@@ -31,6 +31,7 @@ The main module of PathogenFinder2 can be used in 4 modes:
 * **Predict**: Predicts pathogenic capacity using pre-trained weights for the neural network. The model can predict several inputs at the same time, although notice that the steps of protein prediction and embedding are not parallelized for several sequences. The input can be a genome in fasta file, a collection of proteins in fasta file, or an embeddings file in HDF5 format. 
 * **Train**: Trains the neural network, with a training and validation dataset. Can only be done using embedding files (HDF5 format).
 * **infer_proteomeLM**: Transforms a collection of genomes into the proteome embedding files (HDF5 format). Can be useful to transform a dataset before using it for training.
+* **setup_gsea**: To install some optional dependencies. Please follow this [link](./docs/Installation.md) to know more.
 
 In order to control the behavior of the software in each of the 4 modes, a json file can be used as input (as the one in *data/configs/config_empty.json*), or different arguments of the command line (only for *predict*).
 ```unix
@@ -45,68 +46,36 @@ options:
   -h, --help            show this help message and exit
 
 PathogenFinder2 functionalities:
-  {predict,train,infer_proteomeLM}
+  {setup_gsea,predict,infer_proteomeLM,train}
+    setup_gsea          Set up the data for GSEA
     predict             Predict bacterial pathogenic capacity with PathogenFinder2
-    train               Train the PathogenFinder2 model for bacterial pathogenic capacity using your own data
     infer_proteomeLM    Predict the protein content and create its embeddings with Prodigal and protT5
+    train               Train the PathogenFinder2 model for bacterial pathogenic capacity using your own data
 ```
 
 ### Predict
 For predicting, it can be used on one sequence or multiple sequences. The input can be a genome, a proteome or the protT5 embeddings of those proteins.
 ```unix
 >>> pathogenfinder2 predict -h
-usage: Pathogenfinder2 predict [-h] [-v] [-d] [--verbose] [-c CONFIG] -o OUTPUTFOLDER [--prodigalPath PRODIGALPATH] [--protT5Path PROTT5PATH] [--diamondPath DIAMONDPATH] [-i INPUTFILE]
-                               [--multipleFiles MULTIPLEFILES] -f {genome,proteome,embeddings} [-w WEIGHTSMODEL] [--embedProteome {False,report,map}] [--attProteins {False,report,align}]
-                               [--dbProteins DBPROTEINS] [--cge]
+usage: Pathogenfinder2 [-h] {setup_gsea,predict,infer_proteomeLM,train} ...
+
+Command line version of PathogenFinder2. Contains the options to predict the pathogenic capacity using an already trained model, as well as mapping the embedding of the genomic
+sequence to the Pathogenic Bacteria Landscape and aligning the highlighted proteins by the model to a protein database. It also include options for training your own model, as well
+as testing an already trained model.
 
 options:
   -h, --help            show this help message and exit
-  -v, --version         Show program's version number and exit
-  -d, --debug           For debugging
-  --verbose             Be verbose
-  -i INPUTFILE, --inputFile INPUTFILE
-                        Path to input for predicting the pathogenic capacity.The format must be described in the -f/--formatSeq argument
-  --multipleFiles MULTIPLEFILES
-                        Path to text file with paths to input files. This option allows for the prediction of bacterial pathogenic capacity of multiple bacterial genomes, by parallelizing
-                        the neural network step.
-  -f {genome,proteome,embeddings}, --formatSeq {genome,proteome,embeddings}
-                        The format of the bacterial sequence(s).
-  -w WEIGHTSMODEL, --weightsModel WEIGHTSMODEL
-                        Path to the file(s) with weights used by the deep learning model to predict. If not selected, the model will use the weights provided by the authors.
-  --embedProteome {False,report,map}
-                        If used, report or/and map the embeddings to the Bacterial Pathogenic Landscape
-  --attProteins {False,report,align}
-                        If used, report the attentions or/and align the 20 proteins with highest attention score to a protein database
-  --dbProteins DBPROTEINS
-                        Path to protein database indexed with diamond to align the proteins highlighted by the attention layer
-  --cge                 Save the predictions in the standard CGE output
 
-General Input/Output options:
-  General Input/Output options that can apply to any mode/functionality
-
-  -c CONFIG, --config CONFIG
-                        Config file (.json) with the configuration to run any of the PathogenFinder2 functionalities (only recommended for experienced users). It will overwrite any of the
-                        commandline arguments, but provides full control of the model.
-  -o OUTPUTFOLDER, --outputFolder OUTPUTFOLDER
-                        Path to folder where to save the files produced by PathogenFinder2
-
-Executable paths:
-  Paths to executables or tertiary software that might be required by PathogenFinder2.Only required if the software is not included on the executable PATH.
-
-  --prodigalPath PRODIGALPATH
-                        Path to Prodigal executable.
-  --protT5Path PROTT5PATH
-                        Path to protT5
-  --diamondPath DIAMONDPATH
-                        Path to Diamond executable
-```
-If the options **--embedProteome** or **--attProteins** are used with *map* or *align*, respectively, the submodule *mapping* from PathogenFinder2 will be used (details on the [Installation](./docs/images/Installation.md) section) 
-
-
-### Train 
-For training, the different options (such as epoch count, file path, etc) must be indicated by the json file format. The input data must also be already embeddings files produced with protT5 (or with the function "Infer Protein Embeddings", as described below).
-```unix
-pathogenfinder2 train -h
+PathogenFinder2 functionalities:
+  {setup_gsea,predict,infer_proteomeLM,train}
+    setup_gsea          Set up the data for GSEA
+    predict             Predict bacterial pathogenic capacity with PathogenFinder2
+    infer_proteomeLM    Predict the protein content and create its embeddings with Prodigal and protT5
+    train               Train the PathogenFinder2 model for bacterial pathogenic capacity using your own data
+(pathogenfinder2_env) (base) bash-5.1$ pathogenfinder2 predict -h
+usage: Pathogenfinder2 predict [-h] [-v] [-d] [--verbose] [-c CONFIG] -o OUTPUTFOLDER [--prodigalPath PRODIGALPATH] [--diamondPath DIAMONDPATH] [-i INPUTFILE]
+                               [--multipleFiles MULTIPLEFILES] -f {genome,proteome,embeddings} [--protT5Path PROTT5PATH] [--weightsModel WEIGHTSMODEL] [--embedProteome {report,map}]
+                               [--attProteins {report,align}] [--cge] [--dbProteins DBPROTEINS] [--gsea] [--dbMetadataProteins DBMETADATAPROTEINS] [--minsize_gsea MINSIZE_GSEA]
 
 options:
   -h, --help            show this help message and exit
@@ -124,18 +93,84 @@ General Input/Output options:
                         Path to folder where to save the files produced by PathogenFinder2
 
 Executable paths:
-  Paths to executables or tertiary software that might be required by PathogenFinder2.Only required if the software is not included on the executable PATH.
+  Paths to executables or tertiary software that might be required by PathogenFinder2. Only required if the software is not included on the executable PATH.
 
   --prodigalPath PRODIGALPATH
                         Path to Prodigal executable.
-  --protT5Path PROTT5PATH
-                        Path to protT5
   --diamondPath DIAMONDPATH
+                        Path to Diamond executable
+
+Pathogen Capacity prediction Options:
+  Options for running the basic functionalities to predict pathogenic capacity of PathogenFinder2
+
+  -i INPUTFILE, --inputFile INPUTFILE
+                        Path to input for predicting the pathogenic capacity. The format must be described in the -f/--formatSeq argument
+  --multipleFiles MULTIPLEFILES
+                        Path to text file with paths to input files. This option allows for the prediction of bacterial pathogenic capacity of multiple bacterial genomes, by
+                        parallelizing the neural network step.
+  -f {genome,proteome,embeddings}, --formatSeq {genome,proteome,embeddings}
+                        The format of the bacterial sequence(s).
+  --protT5Path PROTT5PATH
+                        Path to local protT5 model
+  --weightsModel WEIGHTSMODEL
+                        Path to the file(s) with weights used by the deep learning model to predict. If not selected, the model will use the weights provided by the authors.
+  --embedProteome {report,map}
+                        If used, report or/and map the embeddings to the Bacterial Pathogenic Landscape
+  --attProteins {report,align}
+                        If used, report the attentions or/and align the 20 proteins with highest attention score to a protein database
+  --cge                 Save the predictions in the standard CGE output
+
+Protein Alignment Options:
+  Options for aligning the proteins of interest highlighted by PathogenFinder2
+
+  --dbProteins DBPROTEINS
+                        Path to protein database indexed with diamond to align the proteins highlighted by the attention layer
+  --gsea                Run GSEA-like analysis on highlighted proteins
+  --dbMetadataProteins DBMETADATAPROTEINS
+                        Path to protein database metadata previously formated with setup_gsea
+  --minsize_gsea MINSIZE_GSEA
+                        Minimum size for a gene set to be included in gsea
+```
+If the options **--embedProteome** or **--attProteins** are used with *map* or *align*, respectively, the submodule *mapping* from PathogenFinder2 will be used (details on the [Installation](./docs/images/Installation.md) section) 
+
+
+### Train 
+For training, the different options (such as epoch count, file path, etc) must be indicated by the json file format. The input data must also be already embeddings files produced with protT5 (or with the function "Infer Protein Embeddings", as described below).
+```unix
+pathogenfinder2 train -h
+
+usage: Pathogenfinder2 train [-h] [-v] [-d] [--verbose] [-c CONFIG] -o OUTPUTFOLDER [--prodigalPath PRODIGALPATH] [--diamondPath DIAMONDPATH]
+
+options:
+  -h, --help            show this help message and exit
+  -v, --version         Show program's version number and exit
+  -d, --debug           For debugging
+  --verbose             Be verbose
+
+General Input/Output options:
+  General Input/Output options that can apply to any mode/functionality
+
+  -c CONFIG, --config CONFIG
+                        Config file (.json) with the configuration to run any of the PathogenFinder2 functionalities (only recommended for experienced users). It will overwrite any
+                        of the commandline arguments, but provides full control of the model.
+  -o OUTPUTFOLDER, --outputFolder OUTPUTFOLDER
+                        Path to folder where to save the files produced by PathogenFinder2
+
+Executable paths:
+  Paths to executables or tertiary software that might be required by PathogenFinder2. Only required if the software is not included on the executable PATH.
+
+  --prodigalPath PRODIGALPATH
+                        Path to Prodigal executable.
+  --diamondPath DIAMONDPATH
+                        Path to Diamond executable
 ```
 ### Infer Protein Embeddings
 Produces the protein embeddings predicted from genome files.
 ```unix
 pathogenfinder2 infer_proteomeLM -h
+usage: Pathogenfinder2 infer_proteomeLM [-h] [-v] [-d] [--verbose] [-c CONFIG] -o OUTPUTFOLDER [--prodigalPath PRODIGALPATH] [--diamondPath DIAMONDPATH] [-i INPUTFILE]
+                                        [--multipleFiles MULTIPLEFILES]
+
 options:
   -h, --help            show this help message and exit
   -v, --version         Show program's version number and exit
@@ -150,18 +185,16 @@ General Input/Output options:
   General Input/Output options that can apply to any mode/functionality
 
   -c CONFIG, --config CONFIG
-                        Config file (.json) with the configuration to run any of the PathogenFinder2 functionalities (only recommended for experienced users). It will overwrite any of the
-                        commandline arguments, but provides full control of the model.
+                        Config file (.json) with the configuration to run any of the PathogenFinder2 functionalities (only recommended for experienced users). It will overwrite any
+                        of the commandline arguments, but provides full control of the model.
   -o OUTPUTFOLDER, --outputFolder OUTPUTFOLDER
                         Path to folder where to save the files produced by PathogenFinder2
 
 Executable paths:
-  Paths to executables or tertiary software that might be required by PathogenFinder2.Only required if the software is not included on the executable PATH.
+  Paths to executables or tertiary software that might be required by PathogenFinder2. Only required if the software is not included on the executable PATH.
 
   --prodigalPath PRODIGALPATH
                         Path to Prodigal executable.
-  --protT5Path PROTT5PATH
-                        Path to protT5
   --diamondPath DIAMONDPATH
                         Path to Diamond executable
 ```

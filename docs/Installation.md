@@ -52,10 +52,39 @@ wget http://github.com/bbuchfink/diamond/releases/download/v2.1.11/diamond-linux
 tar xzf diamond-linux64.tar.gz
 ```
 
-#### Protein Database (UniRef50) (Optional)
-The recommended protein database for aligning the highlighted proteins to is UniRef50. To download the database and format it for Diamond, follow the next steps. Please notice that "/path/to" means the path where that file is located, as PathogenFinder2 is flexible enough to allow you to place the file where is necessary:
+#### Protein Database (Optional)
+The protein databases available for default to align the highlighted proteins by the attention module are UniRef50 and Swiss-Prot. While the first one offers more coverage due to its size, the second one will provide better metadata and the possibility to perform GSEA, being also less intense computationally.
+##### UniRef50
+To download the database and format it for Diamond, follow the next steps. Please notice that "/path/to" means the path where that file is located, as PathogenFinder2 is flexible enough to allow you to place the file where is necessary:
 ```unix
 wget https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref50/uniref50.fasta.gz
 gunzip uniref50.fasta.gz
 /path/to/diamond makedb --in /path/to/uniref50.fasta -d /path/to/uniref50
+```
+#### Swiss-Prot
+As downloading the database (and formatting it for performing GSEA) is slightly more difficult, we have created a functionality on pathogenfinder2 to perform those steps for you.
+* **setup_gsea**: Can download the swiss-prot (bacteria proteins) dataset, index it with Diamond, and format it for GSEA. If the user only wants to format the already downloaded dataset, just point to the tsv file (protein dataset metadata) with the --swissprot_tsv option.
+
+```unix
+pathogenfinder2 setup_gsea -h
+usage: Pathogenfinder2 setup_gsea [-h] [-v] [-d] [--verbose] [--swissprot_tsv SWISSPROT_TSV] [--go_file GO_FILE] --outputFolder OUTPUTFOLDER
+
+options:
+  -h, --help            show this help message and exit
+  -v, --version         Show program's version number and exit
+  -d, --debug           For debugging
+  --verbose             Be verbose
+
+SetUp SwissProt for GSEA Options:
+  Options for setting up SwissProt for GSEA Options
+
+  --swissprot_tsv SWISSPROT_TSV
+                        Swiss-Prot TSV metadata file to be formated
+  --go_file GO_FILE     Go-basic file
+  --outputFolder OUTPUTFOLDER
+                        Out folder
+```
+Example of usage:
+```unix
+pathogenfinder2 setup_gsea --outputFolder /path/to/folder
 ```
