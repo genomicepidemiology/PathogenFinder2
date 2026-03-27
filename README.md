@@ -204,7 +204,7 @@ For more information about the dataset used for training and evaluating the mode
 
 ## Citation
 When using the method please cite:
-* Ferrer Florensa, Alfred, et al. "Whole-genome prediction of bacterial pathogenic capacity on novel bacteria using protein language models, with PathogenFinder2." bioRxiv (2025): 2025-04.
+Alfred Ferrer Florensa, Jose Juan Almagro Armenteros, Rolf Sommer Kaas, Philip Thomas Lanken Conradsen Clausen, Henrik Nielsen, Burkhard Rost, Frank M Aarestrup, Whole-genome prediction of bacterial pathogenic capacity on novel bacteria using protein language models with PathogenFinder2, Bioinformatics, 2026;, btag129, https://doi.org/10.1093/bioinformatics/btag129 
 ## References
 1. Hyatt, Doug, et al. "Prodigal: prokaryotic gene recognition and translation initiation site identification." BMC bioinformatics 11 (2010): 1-11.
 2. Buchfink, Benjamin, Klaus Reuter, and Hajk-Georg Drost. "Sensitive protein alignments at tree-of-life scale using DIAMOND." Nature methods 18.4 (2021): 366-368.
