@@ -131,7 +131,7 @@ Protein Alignment Options:
   --minsize_gsea MINSIZE_GSEA
                         Minimum size for a gene set to be included in gsea
 ```
-If the options **--embedProteome** or **--attProteins** are used with *map* or *align*, respectively, the submodule *mapping* from PathogenFinder2 will be used (details on the [Installation](./docs/images/Installation.md) section) 
+If the options **--embedProteome** or **--attProteins** are used with *map* or *align*, respectively, the submodule *mapping* from PathogenFinder2 will be used (details on the [Installation](./docs/Installation.md) section) 
 
 
 ### Train 

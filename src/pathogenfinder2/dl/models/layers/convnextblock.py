@@ -2,8 +2,7 @@ from torch import nn, Tensor
 import torch
 from functools import partial
 from torchvision.ops.stochastic_depth import StochasticDepth 
-from torchvision.ops import stochastic_depth
-from .utils import Permute, Padding1d
+from pathogenfinder2.dl.models.layers.utils import Permute, Padding1d
 
 class CNBlock(nn.Module):
     multiply_factor = 4

@@ -1,2 +1,2 @@
-#from dl.utils.data_utils import ProteomeDataset, NN_Data
-#from dl.utils.report_utils import Memory_Report, ReportNN
+from pathogenfinder2.dl.utils.data import ProteomeDataset, EmbeddingData
+from pathogenfinder2.dl.utils.reporting import MemoryReport

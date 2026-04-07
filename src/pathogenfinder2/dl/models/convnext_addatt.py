@@ -1,13 +1,13 @@
 from torch import nn, Tensor
 import torch
-from .layers.convnextblock import CNBlock
+from pathogenfinder2.dl.models.layers.convnextblock import CNBlock
 from functools import partial
-from .layers.utils import LayerNorm1d, Conv1dNormActivation, Permute
+from pathogenfinder2.dl.models.layers.utils import LayerNorm1d, Permute
 from typing import Union, Tuple
 from torchvision.ops.stochastic_depth import StochasticDepth
-from .layers.attention import Attention_Methods
-from .layers.classifier import Classifier
-from .layers import utils as utils
+from pathogenfinder2.dl.models.layers.attention import Attention_Methods
+from pathogenfinder2.dl.models.layers.classifier import Classifier
+from pathogenfinder2.dl.models.layers import utils
 
 
 
@@ -41,10 +41,8 @@ class ConvNext_AddAtt_Net(nn.Module):
 
         if norm == "Layer":
             norm_layer = partial(LayerNorm1d, eps=1e-6)
-        elif norm == "Batch":
-            norm_layer = BatchNorm
         else:
-            norm_layer = None
+            norm_layer = nn.Identity
 
         self.stage_block_id = 1
         self.stochastic_depth_prob = stochastic_depth_prob
@@ -91,7 +89,7 @@ class ConvNext_AddAtt_Net(nn.Module):
         if fnn_dim != 0:
             self.fnn_out = nn.Sequential(norm_layer(block_dims_lst[-1]), nn.Linear(block_dims_lst[-1],fnn_dim), nn.ReLU())
             nn.init.kaiming_normal_(self.fnn_out[-2].weight)
-            self.fnn_out[-2].data.fill(0.01)
+            self.fnn_out[-2].bias.data.fill_(0.01)
             inclass_dim = fnn_dim
         else:
             self.fnn_out = None
@@ -145,23 +143,11 @@ class ConvNext_AddAtt_Net(nn.Module):
                     )
         return stemcell
 
-    def create_stemcell_fancy(self, input_dim: int, output_dim: int, norm_layer: nn.Module)->nn.Module:
-        stem_cell = Conv1dNormActivation(
-                        input_dim,
-                        output_dim,
-                        kernel_size=1,
-                        stride=1,
-                        padding=1//2,
-                        norm_layer=norm_layer,
-                        activation_layer=None,
-                        bias=False,
-                        )
-        return stem_cell
-
     def forward(self, x: Tensor, lengths: Tensor) -> Tuple[Tensor, Union[Tensor, None]]:
         mask = utils.create_mask(seq_lengths=lengths, dimensions_batch=x.shape)
         x = self.input_dropout(x)
-        x = self.stem_cell(x)
+        if self.stem_cell:
+            x = self.stem_cell(x)
         x = x.masked_fill(mask, 0)
         for layer in self.features:
             x = layer(x)

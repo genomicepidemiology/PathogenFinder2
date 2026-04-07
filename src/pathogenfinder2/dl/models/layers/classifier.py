@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from functools import partial
-from .utils import LayerNorm1d, SinusoidalPositionEmbeddings, Permute
+from pathogenfinder2.dl.models.layers.utils import LayerNorm1d, SinusoidalPositionEmbeddings, Permute
 
 
 class Classifier(nn.Module):
@@ -9,7 +9,7 @@ class Classifier(nn.Module):
     def __init__(self, dim, num_classes, length_information, length_dim=None, dropout_embed=0.2):
         super(Classifier, self).__init__()
 
-        if not length_dim or length_dim == None:
+        if not length_dim:
             length_dim = dim//7
 
         if not length_information:
@@ -25,12 +25,14 @@ class Classifier(nn.Module):
                                     )
             if length_information == "concat1":
                 dim = dim*2
-        else:
+        elif length_information == "concat2":
             self.length_information = length_information
             dim += 1
+        else:
+            raise ValueError(f"Unknown length_information mode: '{length_information}'. "
+                             "Choose from: False, 'add', 'concat1', 'concat2'.")
         norm_layer = partial(LayerNorm1d, eps=1e-6)
         self.norm_layer = norm_layer(dim)
-        self.flatten = nn.Flatten(1)
         self.linear_out = nn.Linear(dim, num_classes)
 
 
@@ -47,7 +49,7 @@ class Classifier(nn.Module):
             length_step = torch.squeeze(self.length_step(t), -1)
             x = torch.concat((x, length_step), axis=1)
         else:
-            x = x
+            pass
         x = self.norm_layer(x)
         x = self.linear_out(x)
         return x

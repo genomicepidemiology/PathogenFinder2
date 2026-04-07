@@ -1,10 +1,10 @@
 # Installation
-PathogenFinder2 consist of a main package (pathogenFinder2) that can be installed with Pip (recommended) or with Docker (comming).
+PathogenFinder2 consist of a main package (PathogenFinder2) that can be installed with Pip (recommended) or with Docker (comming).
 
-If you are installing through Pip, the dependencies of external software and optional databases must be installed as described below. If you are installing thhrough Docker, the dependencies and databases will be installed through it.
+If you are installing through Pip, the dependencies of external software and optional databases must be installed as described below. If you are installing through Docker, the dependencies and databases will be installed through it.
 
 ## Installing through Pip
-**Important**: This will install PathogFinder2 in the environment where you run pip and potenitally update the python modules ResFinder depends on. It is recommended to run PathogenFinder2 in its own environment, in order to avoid breaking existing installations and prevent ResFinder from getting broken by future unrelated pip installations. This is described in the optional step below.
+**Important**: This will install PathogFinder2 in the environment where you run pip and potentially update the python modules PathogenFinder2 depends on. It is recommended to run PathogenFinder2 in its own environment, in order to avoid breaking existing installations and prevent PathogenFinder2 from getting broken by future unrelated pip installations. This is described in the optional step below.
 
 ### Optional: Create virtual environment
 
@@ -16,7 +16,7 @@ python3 -m venv pathogenfinder2_env
 # Activate environment
 source pathogenfinder2_env/bin/activate
 
-# When you are finished using ResFinder deactivate the environment
+# When you are finished using PathogenFinder2 deactivate the environment
 deactivate
 ```
 ### Install PathogenFinder2

@@ -4,8 +4,8 @@ from torch import nn
 import torch.nn.functional as F
 from collections import OrderedDict
 
-import dl.models.layers.utils as utils
-from dl.models.layers.attention import Attention_Methods
+from pathogenfinder2.dl.models.layers import utils
+from pathogenfinder2.dl.models.layers.attention import Attention_Methods
 
 
 class AddAtt_Net(nn.Module):

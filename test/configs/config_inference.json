@@ -1,6 +1,6 @@
 {
 "Misc Parameters": {
-	"Notes": "This is a base config file",
+	"Notes": "Example inference config — adjust paths to your environment",
 	"Name": "test1",
 	"Results Folder": "../../test/test1_infer",
 	"Actions": ["train"],
@@ -32,9 +32,9 @@
         "Attention Dropout": 0.4,
         "Memory Report": false,
 	"Loss Function": "bcelogits",
-	"Network Weights": ["/zhome/94/2/142348/PathogenFinder_dev/test/test1/weights_model.pickle", 
-				"/zhome/94/2/142348/PathogenFinder_dev/test/test1/weights_model.pickle",
-				"/zhome/94/2/142348/PathogenFinder_dev/test/test1/weights_model.pickle"],
+	"Network Weights": ["path/to/weights_model1.pt",
+				"path/to/weights_model2.pt",
+				"path/to/weights_model3.pt"],
 	"Data Parameters":{
 		"asynchronity": true,
 		"num_workers": 8,
@@ -45,7 +45,7 @@
 "Inference Parameters":{
 	"Preprocessing Parameters":{},
 	"Sequence Format": "embeddings",
-        "Input Data": "/zhome/94/2/142348/PathogenFinder_dev/test/multiple_files.tsv",
+        "Input Data": "path/to/multiple_files.tsv",
 	"Multiple Files": true
-}               
+}
 }

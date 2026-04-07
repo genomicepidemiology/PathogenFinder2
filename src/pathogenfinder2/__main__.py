@@ -1,5 +1,5 @@
 
-from pathogenfinder2.pathogenfinder2 import main
+from pathogenfinder2.main import main
 
 if __name__ == "__main__":
     main()

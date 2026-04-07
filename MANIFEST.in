@@ -1,6 +1,6 @@
-include src/pathogenfinder2/data/models_weights/weights_model1.pickle
-include src/pathogenfinder2/data/models_weights/weights_model2.pickle
-include src/pathogenfinder2/data/models_weights/weights_model3.pickle
-include src/pathogenfinder2/data/models_weights/weights_model4.pickle
+include src/pathogenfinder2/data/models_weights/weights_model1.pt
+include src/pathogenfinder2/data/models_weights/weights_model2.pt
+include src/pathogenfinder2/data/models_weights/weights_model3.pt
+include src/pathogenfinder2/data/models_weights/weights_model4.pt
 include src/pathogenfinder2/data/bpl/embeddings.npz
 include src/pathogenfinder2/data/configs/config_base.json

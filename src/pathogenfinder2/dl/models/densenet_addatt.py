@@ -5,9 +5,9 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from collections import OrderedDict
 
-import dl.models.layers.utils as utils
-from dl.models.layers.attention import Attention_Methods
-from dl.models.layers.denseblock import Bottleneck
+from pathogenfinder2.dl.models.layers import utils
+from pathogenfinder2.dl.models.layers.attention import Attention_Methods
+from pathogenfinder2.dl.models.layers.denseblock import Bottleneck
 
 class DenseNet_AddAtt_Net(nn.Module):
 
@@ -58,10 +58,6 @@ class DenseNet_AddAtt_Net(nn.Module):
         torch.nn.init.xavier_normal_(self.linear_out.weight)
         self.linear_out.bias.data.fill_(0.01)
 
-    def masked_AvgPool(self, x, seq_lengths):
-        x = torch.sum(x, 2)
-        x = torch.divide(x, seq_lengths)
-        return x
 
     def forward(self, x, seq_lengths):
         x = self.in_layer(x)

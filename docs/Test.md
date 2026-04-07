@@ -28,8 +28,8 @@ The output path indicated with *-o* will contain the folder **predictionPF2/** t
 If PathogenFinder2 is run with the complete mode (BPL and Proteins of interest) the next files will also be produced.
 * **postprocess_PF2**: will contain files produced during alignment (Diamond).
 *  **results_PF2**:
-    * *embeddings.npz*: the embeddings defining the genomic sequence. Only produced if --embeddings is used.
-    * *attentions.npz*: the attention score values per protein. Only produced if --attentions is used.
-    * *closeneighbors_bpl.tsv*: the metadata of the 10 closer pathogens to the sequence analyzed. Only produced if --embeddings is used with "map".
-    * *mapped_bpl.png*: the Bacterial Pathogenic Landscape with the location of the sequence analyzed. Only produced if --embeddings is used with "map".
-    * *mapped_proteins.tsv*: hits of the top proteins highlighted by the attentions score on the UniRef50 database. Only produced if --attentions is used with "map".
+    * *embeddings.npz*: the embeddings defining the genomic sequence. Only produced if --embedProteome is used.
+    * *attentions.npz*: the attention score values per protein. Only produced if --attProteins is used.
+    * *closeneighbors_bpl.tsv*: the metadata of the 10 closer pathogens to the sequence analyzed. Only produced if --embedProteome is used with "map".
+    * *mapped_bpl.png*: the Bacterial Pathogenic Landscape with the location of the sequence analyzed. Only produced if --embedProteome is used with "map".
+    * *mapped_proteins.tsv*: hits of the top proteins highlighted by the attentions score on the UniRef50 database. Only produced if --attProteins is used with "map".

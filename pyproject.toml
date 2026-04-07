@@ -4,49 +4,44 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PathogenFinder2"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = ["pandas >= 2.2.2", "accelerate",
 		"matplotlib", "scikit-learn", "torch >= 2.3.1",
 	        "tqdm", "h5py","sentencepiece",
 	        "transformers>=3.0", "pytorch_warmup",
-	        "torchvision", "torchmetrics", "wandb"]
+	        "torchvision", "torchmetrics", "gitpython",
+	        "jsonschema >= 4.0"]
 requires-python = ">= 3.10"
 authors = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"},]
 maintainers = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"}]
-description = "Find me some Pathogens!"
+description = "Deep learning tool for predicting bacterial pathogenic capacity from genomic sequences."
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Biologists", #Fix this
-  "Topic :: Software Development :: Build Tools",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3 :: Only",
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
-keywords = ["deep learning", "epidemiology", "microbiology"]
+keywords = ["deep learning", "epidemiology", "microbiology", "pathogenicity", "bioinformatics"]
 
 [project.optional-dependencies]
 mapping = ["umap-learn>=0.5.8", "seaborn", "gseapy", "goatools"]
+wandb = ["wandb"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "build", "twine"]
 
 [project.urls]
-Homepage = "https://example.com"
-Documentation = "https://readthedocs.org"
+Homepage = "https://github.com/genomicepidemiology/PathogenFinder"
 Repository = "https://github.com/genomicepidemiology/PathogenFinder.git"
 Issues = "https://github.com/genomicepidemiology/PathogenFinder/issues"
-Changelog = "https://github.com/genomicepidemiology/PathogenFinder/blob/master/CHANGELOG.md"
 
 [project.scripts]
-pathogenfinder2 = "pathogenfinder2.pathogenfinder2:main"
-pathogenfinder2_mapping = "pathogenfinder2.pathogenfinder2_mapping:main"
-
-[tool.pdm.version]
-source = "file"
-path = "src/PathogenFinder/__init__.py"
+pathogenfinder2 = "pathogenfinder2.main:main"
+pathogenfinder2_mapping = "pathogenfinder2.postprocessing.alignment:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -55,6 +50,31 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-mypkg = ["*.json",
-          "*.npz",
-          "*.pickle"]
+pathogenfinder2 = ["*.json", "*.npz", "*.pt", "py.typed",
+                   "data/configs/*.json", "data/models_weights/*.pt",
+                   "data/bpl/*.npz"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+markers = ["slow: requires GPU or external tools (deselect with -m 'not slow')"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # do not perform function calls in default arguments
+    "SIM108", # ternary operator — often less readable in scientific code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test/*" = ["F401", "F811"]  # unused imports / redefinitions common in test fixtures

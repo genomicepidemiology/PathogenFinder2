@@ -2,7 +2,7 @@ import torch
 import math
 from torch import nn, Tensor
 from functools import partial
-from .utils import LayerNorm1d, Permute
+from pathogenfinder2.dl.models.layers.utils import LayerNorm1d, Permute
 from torchvision.ops.stochastic_depth import StochasticDepth
 
 
@@ -18,7 +18,7 @@ class Attention_Methods(nn.Module):
             norm_layer = partial(LayerNorm1d, eps=1e-6)
             self.norm_layer = norm_layer
         else:
-            self.norm_layer = None
+            self.norm_layer = nn.Identity
 
         self.k_w = nn.Sequential(
                                 self.norm_layer(dimensions_in),
@@ -47,16 +47,7 @@ class Attention_Methods(nn.Module):
 
     def init_weights(self):
         torch.nn.init.xavier_normal_(self.q_w[-1].weight)
-        if self.q_w[-1].bias is not None:
-            self.q_w.bias[-1].data.fill_(0.01)
-
         torch.nn.init.xavier_normal_(self.k_w[-1].weight)
-        if self.k_w[-1].bias is not None:
-            self.k_w.bias[-1].data.fill_(0.01)
-
- #       torch.nn.init.xavier_normal_(self.score_proj.weight)
-  #      if self.score_proj.bias is not None:
-   #         self.score_proj.data.fill_(0.01)
 
     def attention_forward(self, x_in, mask):
         x_in = x_in.permute(0, 2, 1)

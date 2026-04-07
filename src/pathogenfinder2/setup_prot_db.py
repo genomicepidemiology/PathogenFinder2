@@ -1,3 +1,4 @@
+import logging
 import re
 import requests
 import os
@@ -5,6 +6,10 @@ import subprocess
 from tqdm import tqdm
 import pandas as pd
 from goatools.obo_parser import GODag
+
+from pathogenfinder2.exceptions import ExternalToolError
+
+logger = logging.getLogger(__name__)
 
 
 class SetupSwissProt:
@@ -168,11 +173,14 @@ class SetupSwissProt:
         try:
             subprocess.run(
                 [diamond_path, "makedb", "--in", fasta, "--db", db_name],
-                check=True
+                check=True,
+                stderr=subprocess.PIPE,
             )
-            print(f"DIAMOND DB created: {db_name}.dmnd")
+            logger.info("Diamond DB created: %s.dmnd", db_name)
         except subprocess.CalledProcessError as e:
-            raise RuntimeError("DIAMOND indexing failed") from e
+            stderr_msg = e.stderr.decode(errors="replace").strip()
+            raise ExternalToolError(f"DIAMOND indexing failed: {stderr_msg}") from e
+        return f"{db_name}.dmnd"
 
     @staticmethod
     def set_goterm(go_dag, metadata, column_name="Gene Ontology (biological process)"):

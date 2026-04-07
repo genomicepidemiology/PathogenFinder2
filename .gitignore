@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+.installed.cfg
+MANIFEST
+.Python
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+.eggs/
+*.egg-info/
+.pdm-build/
+.pdm-python
+__pypackages__/
+
+# PyTorch / ML
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+runs/
+wandb/
+lightning_logs/
+mlruns/
+
+# Data files (large)
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.pickle
+*.pkl
+*.db
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+
+# Logs
+*.log
+logs/
+
+# Docs build
+docs/_build/
+docs/site/

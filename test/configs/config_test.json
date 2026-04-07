@@ -1,8 +1,8 @@
 {
 "Misc Parameters": {
-	"Notes": "This is a base config file",
+	"Notes": "Example test config — adjust paths to your environment",
 	"Name": "TESTFINAL2",
-	"Results Folder": "/ceph/hpc/data/d2023d12-072-users/results_training_foolaround/all_data/TESTFINALYES",
+	"Results Folder": "path/to/results",
 	"Actions": ["test"],
 	"Report Results": "file",
 	"Project Name": "PathogenFinder2"
@@ -32,10 +32,10 @@
         "Attention Dropout": 0.4,
         "Memory Report": false,
 	"Loss Function": "bcelogits",
-	"Network Weights": ["/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model1.pickle",
-			"/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model2.pickle",
-			"/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model3.pickle",
-			"/ceph/hpc/home/eualfredff/scripts/PathogenFinder_dev/models_weights/weights_model4.pickle"],
+	"Network Weights": ["path/to/weights_model1.pt",
+			"path/to/weights_model2.pt",
+			"path/to/weights_model3.pt",
+			"path/to/weights_model4.pt"],
 	"Data Parameters":{
 		"asynchronity": true,
 		"num_workers": 8,
@@ -45,7 +45,7 @@
 	},
 "Test Parameters":{
 	"Sequence Format": "embeddings",
-        "Input Data": "/ceph/hpc/data/d2023d12-072-users/metadata/input_test.tsv",
-	"Label File": "/ceph/hpc/data/d2023d12-072-users/metadata/metadata_test.tsv"
-}               
+        "Input Data": "path/to/input_test.tsv",
+	"Label File": "path/to/metadata_test.tsv"
+}
 }

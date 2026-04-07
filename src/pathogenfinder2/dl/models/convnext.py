@@ -1,10 +1,10 @@
 from torch import nn, Tensor
 import torch
-from dl.models.layers.convnextblock import CNBlock
+from pathogenfinder2.dl.models.layers.convnextblock import CNBlock
 from functools import partial
-from dl.models.layers.utils import LayerNorm1d, Conv1dNormActivation, Permute, Padding1d
+from pathogenfinder2.dl.models.layers.utils import LayerNorm1d, Permute, Padding1d
 from torchvision.ops.stochastic_depth import StochasticDepth
-import dl.models.layers.utils as utils
+from pathogenfinder2.dl.models.layers import utils
 from typing import Union, Tuple
 
 
@@ -17,19 +17,16 @@ class ConvNext_Net(nn.Module):
         stochastic_depth_prob: float = 0.0,
         layer_scale: float = 1e-6,
         num_classes: int = 1,
-        norm: str = LayerNorm1d,
+        norm: str = "Layer",
         downsample: bool = False,
         ) -> None:
         super().__init__()
 
- #       assert num_blocks == len(block_dims)
 
         if norm == "Layer":
             norm_layer = partial(LayerNorm1d, eps=1e-6)
-        elif norm == "Batch":
-            norm_layer = BatchNorm
         else:
-            norm_layer = None
+            norm_layer = nn.Identity
 
         self.downsample = downsample
         self.stage_block_id = 0
@@ -56,7 +53,6 @@ class ConvNext_Net(nn.Module):
                 downsample_layer = self.create_downsample(dim_in=dim_block, dim_out=block_dims[n+1], norm_layer=norm_layer)
                 self.features.append(downsample_layer)
 
-        self.avgpool = self.adaptiveavgpool_mask
         self.pool_mask = nn.MaxPool1d(2, stride=2)
 
         self.classifier = nn.Sequential(
@@ -71,7 +67,10 @@ class ConvNext_Net(nn.Module):
                     nn.init.zeros_(m.bias)
     
     def get_sd_prob(self):
-        sd_prob = self.stochastic_depth_prob * self.stage_block_id / (self.num_blocks - 1.)
+        if self.num_blocks > 1:
+            sd_prob = self.stochastic_depth_prob * self.stage_block_id / (self.num_blocks - 1.)
+        else:
+            sd_prob = 0.0
         self.stage_block_id += 1
         return sd_prob
     
@@ -108,7 +107,7 @@ class ConvNext_Net(nn.Module):
         x = x.masked_fill(mask, 0)
         for layer in self.features:
             x = layer(x)
-            if "block" not in layer.__dict__["_modules"].keys():
+            if not isinstance(layer, CNBlock):
                 mask = self.pool_mask(mask.float()).bool()
             x = x.masked_fill(mask, 0)
         x = self.adaptiveavgpool_mask(x, lengths)
