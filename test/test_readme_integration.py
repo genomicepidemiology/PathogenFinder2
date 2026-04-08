@@ -153,3 +153,62 @@ class TestEmbeddingsFormat:
         df = pd.read_csv(tsv, sep="\t", comment="#")
         mean_val = df["Prediction Mean"].iloc[0]
         assert 0.0 <= mean_val <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Help commands — documented in README, no GPU needed
+# ---------------------------------------------------------------------------
+
+class TestHelpCommands:
+
+    def test_main_help(self):
+        result = _run_cli(["-h"])
+        assert result.returncode == 0
+
+    def test_predict_help(self):
+        result = _run_cli(["predict", "-h"])
+        assert result.returncode == 0
+
+    def test_train_help(self):
+        result = _run_cli(["train", "-h"])
+        assert result.returncode == 0
+
+    def test_infer_help(self):
+        result = _run_cli(["infer_proteomeLM", "-h"])
+        assert result.returncode == 0
+
+    def test_setup_gsea_help(self):
+        result = _run_cli(["setup_gsea", "-h"])
+        assert result.returncode == 0
+
+    def test_version(self):
+        result = _run_cli(["--version"])
+        assert result.returncode == 0
+        assert "0.7.0" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# infer_proteomeLM — documented in README
+# ---------------------------------------------------------------------------
+
+@pytest.mark.slow
+class TestInferProteomeLM:
+
+    def test_infer_exits_zero(self, tmp_path):
+        result = _run_cli([
+            "infer_proteomeLM",
+            "-i", str(TEST_GENOME_1),
+            "-o", str(tmp_path),
+        ])
+        assert result.returncode == 0, (
+            f"infer failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+    def test_infer_creates_h5(self, tmp_path):
+        _run_cli([
+            "infer_proteomeLM",
+            "-i", str(TEST_GENOME_1),
+            "-o", str(tmp_path),
+        ])
+        h5_files = list(Path(tmp_path).rglob("*.h5"))
+        assert len(h5_files) > 0, f"No .h5 file found under {tmp_path}"

@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "PathogenFinder2"
 version = "0.7.0"
 dependencies = ["pandas >= 2.2.2", "accelerate",
-		"matplotlib", "scikit-learn", "torch >= 2.3.1",
+		"matplotlib", "scikit-learn", "torch >= 2.6.0",
 	        "tqdm", "h5py","sentencepiece", "protobuf", "tiktoken",
 	        "transformers>=3.0", "pytorch_warmup",
-	        "torchvision", "torchmetrics", "gitpython",
+	        "torchvision >= 0.21.0", "torchmetrics", "gitpython",
 	        "jsonschema >= 4.0"]
 requires-python = ">= 3.10"
 authors = [{name = "Alfred Ferrer Florensa", email = "alff@food.dtu.dk"},]

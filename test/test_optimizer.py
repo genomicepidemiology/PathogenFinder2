@@ -130,9 +130,11 @@ class TestSchedulerStep:
     def test_multistep_step_no_value(self, tiny_network):
         opt = Optimizer(tiny_network, torch.optim.Adam, 1e-3, 1e-4, amsgrad=False)
         opt.set_scheduler("MultiStepLR")
+        opt.optimizer.step()  # required before scheduler.step()
         opt.scheduler_step()  # should not raise
 
     def test_update_scheduler_without_warmup(self, tiny_network):
         opt = Optimizer(tiny_network, torch.optim.Adam, 1e-3, 1e-4, amsgrad=False)
         opt.set_scheduler("MultiStepLR")
+        opt.optimizer.step()  # required before scheduler.step()
         opt.update_scheduler()  # should not raise
