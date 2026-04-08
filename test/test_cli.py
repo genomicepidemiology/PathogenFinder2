@@ -125,7 +125,7 @@ class TestSetupParser:
 
     def test_swissprot_tsv_default(self):
         args = _parse(["setup_gsea", "--outputFolder", "/tmp/out"])
-        assert args.swissprot_tsv is False
+        assert args.swissprot_tsv is None
 
     def test_swissprot_tsv_set(self):
         args = _parse(["setup_gsea", "--outputFolder", "/tmp/out",

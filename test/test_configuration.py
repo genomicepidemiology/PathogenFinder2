@@ -42,9 +42,14 @@ class TestConfigurationPF2:
         for wp in cfg["Model Parameters"]["Network Weights"]:
             assert Path(wp).is_file(), f"Weight file missing: {wp}"
 
-    def test_user_config_false_sentinel_uses_default(self):
-        """Passing False (the default) must use the base config, not raise."""
-        cfg = ConfigurationPF2(mode="Prediction", user_config=False)
+    def test_user_config_none_uses_default(self):
+        """Passing None (what argparse sends) must use the base config, not raise."""
+        cfg = ConfigurationPF2(mode="Prediction", user_config=None)
+        assert cfg["Model Parameters"]["Model Name"] == "ConvNext-AddAtt"
+
+    def test_user_config_omitted_uses_default(self):
+        """Omitting user_config entirely must use the base config."""
+        cfg = ConfigurationPF2(mode="Prediction")
         assert cfg["Model Parameters"]["Model Name"] == "ConvNext-AddAtt"
 
     def test_validation_error_on_bad_schema(self):
