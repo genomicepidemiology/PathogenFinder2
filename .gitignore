@@ -38,6 +38,8 @@ __pypackages__/
 *.pt
 *.pth
 *.ckpt
+# Exception: shipped model weights must be tracked
+!src/pathogenfinder2/data/models_weights/*.pt
 checkpoints/
 runs/
 wandb/
@@ -52,6 +54,9 @@ mlruns/
 *.pickle
 *.pkl
 *.db
+# Exception: shipped package data must be tracked
+!src/pathogenfinder2/data/bpl/*.npz
+!src/pathogenfinder2/data/bpl/*.pkl
 
 # Jupyter
 .ipynb_checkpoints

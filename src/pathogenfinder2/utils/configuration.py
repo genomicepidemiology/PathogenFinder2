@@ -120,6 +120,21 @@ class ConfigurationPF2(UserDict):
     def get_bplfile(self):
         return Path(ConfigurationPF2.CURRENT_DIR) / '../data/bpl/embeddings.npz'
 
+    def get_bpl_fitted_model(self):
+        """Load the pre-fitted UMAP model, or return None if not available."""
+        import joblib
+        model_path = Path(ConfigurationPF2.CURRENT_DIR) / '../data/bpl/umap_model.pkl'
+        if model_path.exists():
+            return joblib.load(model_path)
+        return None
+
+    def get_bpl_coordinates(self):
+        """Load pre-computed BPL reference coordinates, or return None."""
+        import numpy as np
+        coords_path = Path(ConfigurationPF2.CURRENT_DIR) / '../data/bpl/bpl_coordinates.npz'
+        if coords_path.exists():
+            return np.load(coords_path)["train_umap"]
+        return None
 
     def load_user_config(self, user_config):
         if isinstance(user_config, str):

@@ -142,13 +142,17 @@ class PathogenFinder2:
             embeddings_bpl = self.pf2_config.get_bplfile()
         else:
             embeddings_bpl = bpl_file
+        fitted_model = self.pf2_config.get_bpl_fitted_model()
+        train_data = self.pf2_config.get_bpl_coordinates()
         closer_dfs = {}
         for base_seq in self.files_module["input_files"]:
             if success_proteins is not None and success_proteins[base_seq] != "Success":
                 continue
             emb_pred = self.files_module["data_files"]["genome_embeddings"][base_seq]
             mapemb = MapEmbeddings(out_folder=self.files_module.results_folder(base_seq),
-                                   data_embed=embeddings_bpl)
+                                   data_embed=embeddings_bpl,
+                                   fitted_model=fitted_model,
+                                   train_data=train_data)
             test_transf = mapemb.fit_test_data(testdata=emb_pred)
             closer_df, closer_arr = mapemb.knn(test_transf)
             mapemb.make_graph(test_data=test_transf, closer_data=closer_arr)

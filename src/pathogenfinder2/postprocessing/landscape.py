@@ -36,12 +36,19 @@ class MapEmbeddings:
     fitted_model:
         Optional pre-fitted UMAP model.  If provided, ``fitdata()`` is
         skipped and the given model is used directly for transformations.
+    train_data:
+        Optional pre-computed 2-D reference coordinates.  If provided
+        together with *fitted_model*, both fitting and transforming the
+        reference set are skipped entirely.
     """
 
-    def __init__(self, out_folder: str, data_embed: str, fitted_model=None):
+    def __init__(self, out_folder: str, data_embed: str, fitted_model=None, train_data=None):
         self.out_folder = os.path.abspath(out_folder)
         self.data_embed = np.load(data_embed)
-        if fitted_model is not None:
+        if fitted_model is not None and train_data is not None:
+            self.fit_model = fitted_model
+            self.train_data = train_data
+        elif fitted_model is not None:
             self.fit_model = fitted_model
             self.train_data = self.fit_model.transform(self.data_embed["embedding"])
         else:

@@ -30,7 +30,7 @@ license = {file = "LICENSE"}
 keywords = ["deep learning", "epidemiology", "microbiology", "pathogenicity", "bioinformatics"]
 
 [project.optional-dependencies]
-mapping = ["umap-learn>=0.5.8", "seaborn", "gseapy", "goatools"]
+mapping = ["umap-learn>=0.5.4", "pynndescent<=0.5.13", "seaborn", "gseapy", "goatools"]
 wandb = ["wandb"]
 dev = ["pytest", "pytest-cov", "ruff", "mypy", "build", "twine"]
 
@@ -50,9 +50,9 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-pathogenfinder2 = ["*.json", "*.npz", "*.pt", "py.typed",
+pathogenfinder2 = ["*.json", "*.npz", "*.pt", "*.pkl", "py.typed",
                    "data/configs/*.json", "data/models_weights/*.pt",
-                   "data/bpl/*.npz"]
+                   "data/bpl/*.npz", "data/bpl/*.pkl"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]

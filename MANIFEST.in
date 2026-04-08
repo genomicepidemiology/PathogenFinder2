@@ -3,4 +3,6 @@ include src/pathogenfinder2/data/models_weights/weights_model2.pt
 include src/pathogenfinder2/data/models_weights/weights_model3.pt
 include src/pathogenfinder2/data/models_weights/weights_model4.pt
 include src/pathogenfinder2/data/bpl/embeddings.npz
+include src/pathogenfinder2/data/bpl/umap_model.pkl
+include src/pathogenfinder2/data/bpl/bpl_coordinates.npz
 include src/pathogenfinder2/data/configs/config_base.json
