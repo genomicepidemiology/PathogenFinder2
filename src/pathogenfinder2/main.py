@@ -47,7 +47,7 @@ class PathogenFinder2:
     MODES = ["Align_Proteins", "Map_Embeddings", "Prediction", "Train", "Test", "Infer"]
 
     def __init__(self, mode: str, outPath: str,
-                 configuration_file: Union[str, dict, bool] = False,
+                 configuration_file: str | dict | None = None,
                  cge_output: bool = False) -> None:
 
         from pathogenfinder2.utils.configuration import ConfigurationPF2, FilesModule

@@ -75,11 +75,11 @@ class ConfigurationPF2(UserDict):
 
     CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    def __init__(self, mode: str, user_config: Union[str, dict, bool] = False):
+    def __init__(self, mode: str, user_config: str | dict | None = None):
 
         self.data = {}
         self.mode = mode
-        if user_config is False:
+        if user_config is None:
             config_data = ConfigurationPF2.load_baseconfig()
             config_data = ConfigurationPF2.load_baseweights(config_data=config_data)
             ConfigurationPF2.validate(config_data, PREDICTION_SCHEMA)
@@ -132,18 +132,19 @@ class ConfigurationPF2(UserDict):
 
     @staticmethod
     def add_torch_functions(config_dict):
-        if isinstance(config_dict["Train Parameters"]["Optimizer"], str):
-            if config_dict["Train Parameters"]["Optimizer"] == "NAdam":
-                config_dict["Train Parameters"]["Optimizer"] = optim.NAdam
+        train = config_dict.get("Train Parameters")
+        if train is None:
+            return config_dict
+        if "Optimizer" in train and isinstance(train["Optimizer"], str):
+            if train["Optimizer"] == "NAdam":
+                train["Optimizer"] = optim.NAdam
             else:
-                raise ConfigurationError("The optimizer '{}' is not defined".format(
-                                    config_dict["Train Parameters"]["Optimizer"]))
-        if isinstance(config_dict["Train Parameters"]["Loss Function"], str):
-            if config_dict["Train Parameters"]["Loss Function"] == "BCEWithLogitsLoss":
-                config_dict["Train Parameters"]["Loss Function"] = nn.BCEWithLogitsLoss
+                raise ConfigurationError("The optimizer '{}' is not defined".format(train["Optimizer"]))
+        if "Loss Function" in train and isinstance(train["Loss Function"], str):
+            if train["Loss Function"] == "BCEWithLogitsLoss":
+                train["Loss Function"] = nn.BCEWithLogitsLoss
             else:
-                raise ConfigurationError("The loss function '{}' is not defined".format(
-                                    config_dict["Train Parameters"]["Loss Function"]))
+                raise ConfigurationError("The loss function '{}' is not defined".format(train["Loss Function"]))
         return config_dict    
 
 class FilesModule(UserDict):

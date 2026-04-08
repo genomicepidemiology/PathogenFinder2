@@ -96,8 +96,8 @@ def pf2_arguments():
         'SetUp SwissProt for GSEA Options',
         "Options for setting up SwissProt for GSEA Options"
     )
-    base_setup.add_argument("--swissprot_tsv", help="Swiss-Prot TSV metadata file to be formated", default=False)
-    base_setup.add_argument("--go_file", help="Go-basic file", default=False)
+    base_setup.add_argument("--swissprot_tsv", help="Swiss-Prot TSV metadata file to be formated", default=None)
+    base_setup.add_argument("--go_file", help="Go-basic file", default=None)
     base_setup.add_argument("--outputFolder", help="Out folder", required=True)
     base_setup.add_argument("--diamondPath", help="Path to Diamond executable", default="diamond")
 
