@@ -25,8 +25,9 @@ def gpu_preprocessed(tmp_path_factory):
         format_seq="genome", input_file=str(TEST_GENOME_1), multi_file=False)
     pf2.predict_protein_content()
     pf2.infer_embeddings()
-    input_df = pf2.files_module.save_inputmetadata()
-    return pf2, input_df, out
+    pf2.files_module.save_inputmetadata()
+    input_df_path = pf2.files_module["input_metadata"]
+    return pf2, input_df_path, out
 
 
 @pytest.fixture(scope="session")

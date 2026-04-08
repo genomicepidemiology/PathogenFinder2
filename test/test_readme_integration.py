@@ -102,15 +102,15 @@ class TestCGEOutput:
             "-f", "genome", "-o", str(tmp_path), "--cge",
         ])
         assert result.returncode == 0, f"STDERR:\n{result.stderr}"
-        cge_files = list(Path(tmp_path).rglob("cge_out.json"))
-        assert len(cge_files) > 0, f"cge_out.json not found under {tmp_path}"
+        cge_files = list(Path(tmp_path).rglob("cge_output.json"))
+        assert len(cge_files) > 0, f"cge_output.json not found under {tmp_path}"
 
     def test_cge_json_valid_structure(self, tmp_path):
         _run_cli([
             "predict", "-i", str(TEST_GENOME_1), "-f", "genome",
             "-o", str(tmp_path), "--cge",
         ])
-        cge_file = next(Path(tmp_path).rglob("cge_out.json"))
+        cge_file = next(Path(tmp_path).rglob("cge_output.json"))
         with open(cge_file) as f:
             data = json.load(f)
         assert "phenotypes_ml" in data
