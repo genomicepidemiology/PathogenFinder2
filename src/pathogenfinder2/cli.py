@@ -200,6 +200,11 @@ def pf2_arguments():
         help="Path to text file with paths to input files.",
         default=None
     )
+    infer_parser.add_argument(
+        "--protT5Path",
+        help="Path to local protT5 model",
+        default=None,
+    )
 
     # ----- TRAIN (skeleton) -----
     train_parser = subparsers.add_parser(
