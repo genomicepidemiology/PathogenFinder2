@@ -37,6 +37,7 @@ class TestPredictivePassAttentions:
             loader, batch_size=mp["Batch Size"],
             record_attentions=True, record_embeddings=False,
         )
+        assert len(results) > 0
         for batch in results:
             assert batch.attention is not None
 
@@ -51,6 +52,7 @@ class TestPredictivePassEmbeddings:
             loader, batch_size=mp["Batch Size"],
             record_attentions=False, record_embeddings=True,
         )
+        assert len(results) > 0
         for batch in results:
             assert batch.proteome_length is not None
 
@@ -59,14 +61,14 @@ class TestPredictivePassEmbeddings:
 class TestValidationPass:
 
     def test_validation_loss_is_finite(self, gpu_network):
-        nm, loader, _ = gpu_network
-        loss_val, mcc_val = nm.validation_pass(loader)
+        nm, loader, cfg = gpu_network
+        loss_val, mcc_val = nm.validation_pass(loader, batch_size=cfg["Model Parameters"]["Batch Size"])
         assert np.isfinite(loss_val), f"Validation loss is not finite: {loss_val}"
 
     def test_no_gradient_updates(self, gpu_network):
-        nm, loader, _ = gpu_network
+        nm, loader, cfg = gpu_network
         param = next(nm.network.parameters())
         before = param.clone().detach()
-        nm.validation_pass(loader)
+        nm.validation_pass(loader, batch_size=cfg["Model Parameters"]["Batch Size"])
         after = param.clone().detach()
         assert torch.equal(before, after), "Weights changed during validation pass"

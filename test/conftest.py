@@ -58,8 +58,9 @@ def gpu_network(gpu_preprocessed, tmp_path_factory):
         dual_pred=False,
     )
     loader = EmbeddingData.load_data(
-        dataset, batch_size=mp["Batch Size"],
+        dataset, batch_size=1,
         num_workers=mp["Data Parameters"]["num_workers"],
         pin_memory=mp["Data Parameters"]["asynchronity"],
+        shuffle=False, drop_last=False,
     )
     return nm, loader, cfg

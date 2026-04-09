@@ -345,39 +345,42 @@ def main() -> None:
     if args.action == "Setup_SwissProt":
         PathogenFinder2.setup_swissprot(out_folder=args.outputFolder, tsv_path=args.swissprot_tsv,
                                         go_file=args.go_file, diamond_path=args.diamondPath)
-    else:
+    elif args.action == "Prediction":
         pathogenfinder2_main = PathogenFinder2(mode=args.action, outPath=args.outputFolder,
                                                configuration_file=args.config, cge_output=args.cge)
-        if args.action == "Prediction":
-            predictions, success_proteins = pathogenfinder2_main.predict(
-                input_file=args.inputFile, multi_file=args.multipleFiles,
-                format_seq=args.formatSeq, prodigal_path=args.prodigalPath,
-                prott5_path=args.protT5Path, produce_embeddings=args.embedProteome,
-                produce_attentions=args.attProteins)
+        predictions, success_proteins = pathogenfinder2_main.predict(
+            input_file=args.inputFile, multi_file=args.multipleFiles,
+            format_seq=args.formatSeq, prodigal_path=args.prodigalPath,
+            prott5_path=args.protT5Path, produce_embeddings=args.embedProteome,
+            produce_attentions=args.attProteins)
 
-            results_module = PredictionReport(out_folder=pathogenfinder2_main.files_module["folders"]["results"])
-            predictions_paths, embeddings_paths, att_paths = results_module.save_report(
-                results_ensemble=predictions,
-                save_attentions=args.attProteins,
-                save_embeddings=args.embedProteome)
-            if args.embedProteome == "map":
-                _ = pathogenfinder2_main.map_embeddings(embeddings_preds=embeddings_paths,
-                                                        success_proteins=success_proteins)
-            if args.attProteins == "align":
-                _ = pathogenfinder2_main.align_proteins(db_path=args.dbProteins,
-                                                                diamond_path=args.diamondPath,
-                                                                gsea=args.gsea, db_protmetadata=args.dbMetadataProteins,
-                                                                gsea_minsize=args.minsize_gsea,
-                                                                success_proteins=success_proteins)
-            if args.cge:
-                pathogenfinder2_main.save_cge_results()
-        elif args.action == "Train":
-            pathogenfinder2_main.train()
-        elif args.action == "Infer":
-            pathogenfinder2_main.infer(input_file=args.inputFile, multi_file=args.multipleFiles,
-                                       prodigal_path=args.prodigalPath, prott5_path=args.protT5Path)
-        else:
-            raise ConfigurationError("The mode '{}' is not available as part of PathogenFinder2".format(args.action))
+        results_module = PredictionReport(out_folder=pathogenfinder2_main.files_module["folders"]["results"])
+        predictions_paths, embeddings_paths, att_paths = results_module.save_report(
+            results_ensemble=predictions,
+            save_attentions=args.attProteins,
+            save_embeddings=args.embedProteome)
+        if args.embedProteome == "map":
+            _ = pathogenfinder2_main.map_embeddings(embeddings_preds=embeddings_paths,
+                                                    success_proteins=success_proteins)
+        if args.attProteins == "align":
+            _ = pathogenfinder2_main.align_proteins(db_path=args.dbProteins,
+                                                            diamond_path=args.diamondPath,
+                                                            gsea=args.gsea, db_protmetadata=args.dbMetadataProteins,
+                                                            gsea_minsize=args.minsize_gsea,
+                                                            success_proteins=success_proteins)
+        if args.cge:
+            pathogenfinder2_main.save_cge_results()
+    elif args.action == "Train":
+        pathogenfinder2_main = PathogenFinder2(mode=args.action, outPath=args.outputFolder,
+                                               configuration_file=args.config)
+        pathogenfinder2_main.train()
+    elif args.action == "Infer":
+        pathogenfinder2_main = PathogenFinder2(mode=args.action, outPath=args.outputFolder,
+                                               configuration_file=args.config)
+        pathogenfinder2_main.infer(input_file=args.inputFile, multi_file=args.multipleFiles,
+                                   prodigal_path=args.prodigalPath, prott5_path=args.protT5Path)
+    else:
+        raise ConfigurationError("The mode '{}' is not available as part of PathogenFinder2".format(args.action))
 
 
 if __name__ == '__main__':
