@@ -69,6 +69,7 @@ class BatchResults:
 
     def get_samples(self):
         samples = {}
+        cuda_av = torch.cuda.is_available()
         for n in range(len(self)):
             name = str(self.filenames[n])
             samples[name] = {}
@@ -81,15 +82,24 @@ class BatchResults:
             if self.attentions is None:
                 samples[name]["Output"]["Attention"] = [None]
             else:
-                samples[name]["Output"]["Attention"] = self.attentions[n][:,:int(self.proteome_lengths[n][0])].numpy()
+                if cuda_av:
+                    samples[name]["Output"]["Attention"] = self.attentions[n][:,:int(self.proteome_lengths[n][0])].numpy()
+                else:
+                    samples[name]["Output"]["Attention"] = self.attentions[n][:,:int(self.proteome_lengths[n][0])].to(torch.float32).numpy()
             if self.embeddings1 is None:
                 samples[name]["Output"]["Embeddings1"] = [None]
             else:
-                samples[name]["Output"]["Embeddings1"] = self.embeddings1[n].numpy()
+                if cuda_av:
+                    samples[name]["Output"]["Embeddings1"] = self.embeddings1[n].numpy()
+                else:
+                    samples[name]["Output"]["Embeddings1"] = self.embeddings1[n].to(torch.float32).numpy()
             if self.embeddings2 is None:
                 samples[name]["Output"]["Embeddings2"] = [None]
             else:
-                samples[name]["Output"]["Embeddings2"] = self.embeddings2[n].numpy()
+                if cuda_av:
+                    samples[name]["Output"]["Embeddings2"] = self.embeddings2[n].numpy()
+                else:
+                    samples[name]["Output"]["Embeddings2"] = self.embeddings2[n].to(torch.float32).numpy()
         return samples
 
 
